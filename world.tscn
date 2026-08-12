@@ -1,10 +1,26 @@
-[gd_scene format=3 uid="uid://c0w8tw112g17q"]
+[gd_scene format=4 uid="uid://c0w8tw112g17q"]
 
 [ext_resource type="Script" uid="uid://5ett0pwsrhtb" path="res://scripts/player/player.gd" id="1_f3sb7"]
+[ext_resource type="Texture2D" uid="uid://dev6hjbg6su3" path="res://assets/tiles/ground_test 2.png" id="1_fj7yv"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
+texture = ExtResource("1_fj7yv")
+texture_region_size = Vector2i(128, 64)
+0:0/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_wcd18"]
+tile_shape = 1
+tile_size = Vector2i(128, 64)
+sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wcd18"]
 
 [node name="World" type="Node2D" unique_id=1871762989]
+
+[node name="Ground" type="TileMapLayer" parent="." unique_id=1388817698]
+position = Vector2(347, 31)
+tile_map_data = PackedByteArray("AAD//w0AAQAAAAAAAAAAAA4AAQAAAAAAAAAAAA8AAQAAAAAAAAABABAAAQAAAAAAAAABABEAAQAAAAAAAAACABIAAQAAAAAAAAACABMAAQAAAAAAAAADABQAAQAAAAAAAAADABMAAQAAAAAAAAAEABIAAQAAAAAAAAAEABEAAQAAAAAAAAAFABAAAQAAAAAAAAAFAA8AAQAAAAAAAAAGAA4AAQAAAAAAAAAGAA0AAQAAAAAAAAAGAAwAAQAAAAAAAAAFAAsAAQAAAAAAAAAFAAoAAQAAAAAAAAAEAAkAAQAAAAAAAAAEAAgAAQAAAAAAAAADAAcAAQAAAAAAAAADAAYAAQAAAAAAAAACAAcAAQAAAAAAAAACAAgAAQAAAAAAAAABAAkAAQAAAAAAAAABAAoAAQAAAAAAAAAAAAsAAQAAAAAAAAAAAAwAAQAAAAAAAAAAAA0AAQAAAAAAAAABAA4AAQAAAAAAAAABAA8AAQAAAAAAAAACABAAAQAAAAAAAAACABEAAQAAAAAAAAADABIAAQAAAAAAAAADABEAAQAAAAAAAAAEABAAAQAAAAAAAAAEAA8AAQAAAAAAAAAEAA4AAQAAAAAAAAAEAA0AAQAAAAAAAAAFAAwAAQAAAAAAAAAFAA0AAQAAAAAAAAAFAA4AAQAAAAAAAAAEAAwAAQAAAAAAAAADAA0AAQAAAAAAAAADAA4AAQAAAAAAAAACAA8AAQAAAAAAAAADABAAAQAAAAAAAAACAA0AAQAAAAAAAAACAAwAAQAAAAAAAAACAAsAAQAAAAAAAAABAA0AAQAAAAAAAAABAAwAAQAAAAAAAAABAAsAAQAAAAAAAAACAAoAAQAAAAAAAAACAAkAAQAAAAAAAAADAAgAAQAAAAAAAAADAAkAAQAAAAAAAAAEAAoAAQAAAAAAAAAEAAsAAQAAAAAAAAADAAsAAQAAAAAAAAADAAoAAQAAAAAAAAADAAwAAQAAAAAAAAADAA8AAQAAAAAAAAACAA4AAQAAAAAAAAA=")
+tile_set = SubResource("TileSet_wcd18")
 
 [node name="Player" type="CharacterBody2D" parent="." unique_id=1164395281]
 position = Vector2(500, 300)
@@ -14,5 +30,11 @@ script = ExtResource("1_f3sb7")
 shape = SubResource("CapsuleShape2D_wcd18")
 
 [node name="Polygon2D" type="Polygon2D" parent="Player" unique_id=1790481926]
+position = Vector2(-259, -113)
 color = Color(1, 0, 0, 1)
 polygon = PackedVector2Array(323, 102, 305, 132, 289, 163, 307, 187, 326, 211, 345, 189, 360, 166, 353, 140)
+
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=1022272442]
+position = Vector2(73, 26)
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
