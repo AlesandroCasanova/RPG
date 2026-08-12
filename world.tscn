@@ -13,28 +13,50 @@ tile_shape = 1
 tile_size = Vector2i(128, 64)
 sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wcd18"]
+size = Vector2(41, 27)
+
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wcd18"]
 
 [node name="World" type="Node2D" unique_id=1871762989]
 
 [node name="Ground" type="TileMapLayer" parent="." unique_id=1388817698]
+z_index = -10
 position = Vector2(347, 31)
 tile_map_data = PackedByteArray("AAD//w0AAQAAAAAAAAAAAA4AAQAAAAAAAAAAAA8AAQAAAAAAAAABABAAAQAAAAAAAAABABEAAQAAAAAAAAACABIAAQAAAAAAAAACABMAAQAAAAAAAAADABQAAQAAAAAAAAADABMAAQAAAAAAAAAEABIAAQAAAAAAAAAEABEAAQAAAAAAAAAFABAAAQAAAAAAAAAFAA8AAQAAAAAAAAAGAA4AAQAAAAAAAAAGAA0AAQAAAAAAAAAGAAwAAQAAAAAAAAAFAAsAAQAAAAAAAAAFAAoAAQAAAAAAAAAEAAkAAQAAAAAAAAAEAAgAAQAAAAAAAAADAAcAAQAAAAAAAAADAAYAAQAAAAAAAAACAAcAAQAAAAAAAAACAAgAAQAAAAAAAAABAAkAAQAAAAAAAAABAAoAAQAAAAAAAAAAAAsAAQAAAAAAAAAAAAwAAQAAAAAAAAAAAA0AAQAAAAAAAAABAA4AAQAAAAAAAAABAA8AAQAAAAAAAAACABAAAQAAAAAAAAACABEAAQAAAAAAAAADABIAAQAAAAAAAAADABEAAQAAAAAAAAAEABAAAQAAAAAAAAAEAA8AAQAAAAAAAAAEAA4AAQAAAAAAAAAEAA0AAQAAAAAAAAAFAAwAAQAAAAAAAAAFAA0AAQAAAAAAAAAFAA4AAQAAAAAAAAAEAAwAAQAAAAAAAAADAA0AAQAAAAAAAAADAA4AAQAAAAAAAAACAA8AAQAAAAAAAAADABAAAQAAAAAAAAACAA0AAQAAAAAAAAACAAwAAQAAAAAAAAACAAsAAQAAAAAAAAABAA0AAQAAAAAAAAABAAwAAQAAAAAAAAABAAsAAQAAAAAAAAACAAoAAQAAAAAAAAACAAkAAQAAAAAAAAADAAgAAQAAAAAAAAADAAkAAQAAAAAAAAAEAAoAAQAAAAAAAAAEAAsAAQAAAAAAAAADAAsAAQAAAAAAAAADAAoAAQAAAAAAAAADAAwAAQAAAAAAAAADAA8AAQAAAAAAAAACAA4AAQAAAAAAAAA=")
 tile_set = SubResource("TileSet_wcd18")
 
-[node name="Player" type="CharacterBody2D" parent="." unique_id=1164395281]
-position = Vector2(500, 300)
+[node name="Environment" type="Node2D" parent="." unique_id=573763245]
+y_sort_enabled = true
+
+[node name="TreeTest" type="Polygon2D" parent="Environment" unique_id=815244276]
+position = Vector2(797, 449)
+
+[node name="TreeVisual" type="Polygon2D" parent="Environment/TreeTest" unique_id=1058829222]
+position = Vector2(-736, -463)
+color = Color(0, 1, 0, 1)
+polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 826, 373, 738, 196, 646, 361, 710, 371)
+
+[node name="TreeColision" type="StaticBody2D" parent="Environment/TreeTest" unique_id=369145233]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TreeTest/TreeColision" unique_id=172844242]
+position = Vector2(-0.5, -12.5)
+shape = SubResource("RectangleShape2D_wcd18")
+
+[node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
+position = Vector2(668, 449)
 script = ExtResource("1_f3sb7")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=2038915356]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player" unique_id=2038915356]
+position = Vector2(-1, -43)
 shape = SubResource("CapsuleShape2D_wcd18")
 
-[node name="Polygon2D" type="Polygon2D" parent="Player" unique_id=1790481926]
-position = Vector2(-259, -113)
+[node name="Polygon2D" type="Polygon2D" parent="Environment/Player" unique_id=1790481926]
+position = Vector2(-326, -202)
 color = Color(1, 0, 0, 1)
 polygon = PackedVector2Array(323, 102, 305, 132, 289, 163, 307, 187, 326, 211, 345, 189, 360, 166, 353, 140)
 
-[node name="Camera2D" type="Camera2D" parent="Player" unique_id=1022272442]
-position = Vector2(73, 26)
+[node name="Camera2D" type="Camera2D" parent="Environment/Player" unique_id=1022272442]
+position = Vector2(-3, -46)
 position_smoothing_enabled = true
 position_smoothing_speed = 7.0
