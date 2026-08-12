@@ -10,5 +10,10 @@ func _physics_process(_delta: float) -> void:
 		"move_down"
 	)
 
-	velocity = direction * speed
+	var iso_direction := Vector2(
+		direction.x - direction.y,
+		(direction.x + direction.y) * 0.5
+	).normalized()
+
+	velocity = iso_direction * speed
 	move_and_slide()
