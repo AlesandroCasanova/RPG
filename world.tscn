@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://5ett0pwsrhtb" path="res://scripts/player/player.gd" id="1_f3sb7"]
 [ext_resource type="Texture2D" uid="uid://dev6hjbg6su3" path="res://assets/tiles/ground_test 2.png" id="1_fj7yv"]
+[ext_resource type="Texture2D" uid="uid://xitaymm80rrp" path="res://assets/characters/player/player_idle.png" id="3_tlwt5"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
 texture = ExtResource("1_fj7yv")
@@ -17,6 +18,8 @@ sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 size = Vector2(41, 27)
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wcd18"]
+radius = 20.0
+height = 40.0
 
 [node name="World" type="Node2D" unique_id=1871762989]
 
@@ -47,11 +50,17 @@ shape = SubResource("RectangleShape2D_wcd18")
 position = Vector2(668, 449)
 script = ExtResource("1_f3sb7")
 
+[node name="PlayerSprite" type="Sprite2D" parent="Environment/Player" unique_id=1689358491]
+position = Vector2(0, -60)
+scale = Vector2(0.1, 0.1)
+texture = ExtResource("3_tlwt5")
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player" unique_id=2038915356]
-position = Vector2(-1, -43)
+position = Vector2(0, -11)
 shape = SubResource("CapsuleShape2D_wcd18")
 
 [node name="Polygon2D" type="Polygon2D" parent="Environment/Player" unique_id=1790481926]
+visible = false
 position = Vector2(-326, -202)
 color = Color(1, 0, 0, 1)
 polygon = PackedVector2Array(323, 102, 305, 132, 289, 163, 307, 187, 326, 211, 345, 189, 360, 166, 353, 140)
