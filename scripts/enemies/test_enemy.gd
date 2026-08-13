@@ -41,10 +41,10 @@ func _ready() -> void:
 	# El enemigo pertenece a Layer 2.
 	collision_layer = 2
 
-	# Puede colisionar con objetos de Layer 1.
+	# Colisiona con objetos de Layer 1.
 	collision_mask = 1
 
-	# Configuración inicial de la barra.
+	# Barra de vida.
 	health_bar.min_value = 0
 	health_bar.max_value = max_health
 	health_bar.value = health
@@ -82,11 +82,97 @@ func take_damage(amount: int, attacker_position: Vector2) -> void:
 	print("HP: ", health, " / ", max_health)
 	print("==============================")
 
+	# Número flotante.
+	_show_damage_number(amount)
+
+	# Feedback.
 	_flash_damage()
 	_apply_knockback(attacker_position)
 
 	if health <= 0:
 		die()
+
+
+# =========================================================
+# NÚMERO DE DAÑO FLOTANTE
+# =========================================================
+
+func _show_damage_number(amount: int) -> void:
+	var damage_label := Label.new()
+
+	damage_label.text = str(amount)
+
+	damage_label.custom_minimum_size = Vector2(
+		80.0,
+		40.0
+	)
+
+	damage_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+
+	damage_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_CENTER
+	)
+
+	# Posición inicial encima del enemigo.
+	damage_label.position = Vector2(
+		-40.0,
+		-125.0
+	)
+
+	# Tamaño del número.
+	damage_label.add_theme_font_size_override(
+		"font_size",
+		28
+	)
+
+	# Color del daño.
+	damage_label.add_theme_color_override(
+		"font_color",
+		Color(1.0, 0.85, 0.15, 1.0)
+	)
+
+	# Contorno negro para que se lea sobre cualquier fondo.
+	damage_label.add_theme_color_override(
+		"font_outline_color",
+		Color.BLACK
+	)
+
+	damage_label.add_theme_constant_override(
+		"outline_size",
+		6
+	)
+
+	add_child(damage_label)
+
+	# Animación.
+	var tween := create_tween()
+
+	tween.set_parallel(true)
+
+	# El número sube.
+	tween.tween_property(
+		damage_label,
+		"position",
+		damage_label.position + Vector2(0.0, -50.0),
+		0.65
+	)
+
+	# Se desvanece.
+	tween.tween_property(
+		damage_label,
+		"modulate:a",
+		0.0,
+		0.65
+	).set_delay(0.15)
+
+	tween.set_parallel(false)
+
+	# Se elimina al terminar.
+	tween.tween_callback(
+		damage_label.queue_free
+	)
 
 
 # =========================================================
