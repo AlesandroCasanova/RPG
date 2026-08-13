@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://xitaymm80rrp" path="res://assets/characters/player/player_idle.png" id="3_tlwt5"]
 [ext_resource type="Texture2D" uid="uid://hi5u5y512nnu" path="res://assets/characters/player/player_idle_diagonal.png" id="4_036b0"]
 [ext_resource type="Script" uid="uid://dt7ijerfm5rgc" path="res://scripts/enemies/test_enemy.gd" id="6_dwbse"]
+[ext_resource type="Script" uid="uid://bkleq6luic3go" path="res://scripts/ui/hud.gd" id="7_pkg7o"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
 texture = ExtResource("1_fj7yv")
@@ -341,7 +342,8 @@ script = ExtResource("1_f3sb7")
 position = Vector2(0, -60)
 scale = Vector2(0.3, 0.3)
 sprite_frames = SubResource("SpriteFrames_wcd18")
-animation = &"idle_w"
+animation = &"idle_s"
+frame_progress = 0.8567033
 
 [node name="PlayerSprite" type="Sprite2D" parent="Environment/Player" unique_id=1689358491]
 visible = false
@@ -392,3 +394,25 @@ offset_top = -101.0
 offset_right = 41.0
 offset_bottom = -74.0
 show_percentage = false
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=497129756]
+script = ExtResource("7_pkg7o")
+
+[node name="PlayerHealthBar" type="ProgressBar" parent="HUD" unique_id=1851711717]
+modulate = Color(1, 0, 0, 1)
+offset_left = 12.0
+offset_top = 17.0
+offset_right = 272.0
+offset_bottom = 45.0
+value = 100.0
+show_percentage = false
+
+[node name="HealthLabel" type="Label" parent="HUD" unique_id=532704361]
+offset_left = 10.0
+offset_top = 6.0
+offset_right = 274.0
+offset_bottom = 55.0
+text = "100 / 100
+"
+horizontal_alignment = 1
+vertical_alignment = 1
