@@ -284,11 +284,24 @@ animations = [{
 "loop": 1,
 "name": &"idle_w",
 "speed": 5.0
+}, {
+"frames": [],
+"loop": 1,
+"name": &"walk_n",
+"speed": 5.0
+}, {
+"frames": [],
+"loop": 1,
+"name": &"walk_s",
+"speed": 5.0
 }]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wcd18"]
 radius = 20.0
 height = 40.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5k8t"]
+size = Vector2(70, 45)
 
 [node name="World" type="Node2D" unique_id=1871762989]
 
@@ -312,7 +325,7 @@ polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 
 [node name="TreeColision" type="StaticBody2D" parent="Environment/TreeTest" unique_id=369145233]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TreeTest/TreeColision" unique_id=172844242]
-position = Vector2(-0.5, -12.5)
+position = Vector2(-1, -12)
 shape = SubResource("RectangleShape2D_wcd18")
 
 [node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
@@ -323,8 +336,7 @@ script = ExtResource("1_f3sb7")
 position = Vector2(0, -60)
 scale = Vector2(0.3, 0.3)
 sprite_frames = SubResource("SpriteFrames_wcd18")
-animation = &"idle_n"
-frame_progress = 0.6972826
+animation = &"idle_w"
 
 [node name="PlayerSprite" type="Sprite2D" parent="Environment/Player" unique_id=1689358491]
 visible = false
@@ -346,3 +358,10 @@ polygon = PackedVector2Array(323, 102, 305, 132, 289, 163, 307, 187, 326, 211, 3
 position = Vector2(-3, -46)
 position_smoothing_enabled = true
 position_smoothing_speed = 7.0
+
+[node name="AttackArea" type="Area2D" parent="Environment/Player" unique_id=2000753498]
+position = Vector2(-668, -449)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/AttackArea" unique_id=1496730035]
+shape = SubResource("RectangleShape2D_s5k8t")
+disabled = true
