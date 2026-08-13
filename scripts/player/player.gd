@@ -9,7 +9,19 @@ extends CharacterBody2D
 
 
 # =========================================================
-# VIDA DEL JUGADOR
+# DASH
+# =========================================================
+
+@export var dash_speed: float = 850.0
+@export var dash_duration: float = 0.14
+@export var dash_cooldown: float = 0.40
+
+# Tiempo máximo entre el primer y segundo toque.
+@export var dash_double_tap_window: float = 0.25
+
+
+# =========================================================
+# VIDA
 # =========================================================
 
 @export var max_health: int = 100
@@ -27,7 +39,6 @@ var is_dead: bool = false
 @export var attack_duration: float = 0.12
 @export var attack_cooldown: float = 0.35
 
-# Mientras desarrollamos dejamos visible la hitbox.
 @export var show_attack_debug: bool = true
 
 
@@ -39,25 +50,50 @@ var is_dead: bool = false
 
 @onready var attack_area: Area2D = $AttackArea
 
-@onready var attack_collision: CollisionShape2D = \
+@onready var attack_collision: CollisionShape2D = (
 	$AttackArea/CollisionShape2D
+)
 
 
 # =========================================================
-# ESTADO
+# ESTADO DE DIRECCIÓN
 # =========================================================
 
 var last_facing: String = "s"
 
+
+# =========================================================
+# ESTADO DE ATAQUE
+# =========================================================
+
 var attack_time_left: float = 0.0
 var attack_cooldown_left: float = 0.0
 
-# Evita dañar múltiples veces al mismo enemigo
-# durante un único ataque.
 var hit_targets: Array[Node] = []
 
-# Rectángulo rojo provisional.
 var attack_debug: Polygon2D
+
+
+# =========================================================
+# ESTADO DE DASH
+# =========================================================
+
+var is_dashing: bool = false
+
+var dash_direction: Vector2 = Vector2.ZERO
+
+var dash_time_left: float = 0.0
+
+var dash_cooldown_left: float = 0.0
+
+
+# =========================================================
+# DOBLE TOQUE
+# =========================================================
+
+var last_tap_action: String = ""
+
+var double_tap_time_left: float = 0.0
 
 
 # =========================================================
@@ -65,13 +101,13 @@ var attack_debug: Polygon2D
 # =========================================================
 
 func _ready() -> void:
-	# -------------------------
+
+	# -----------------------------------------------------
 	# VIDA
-	# -------------------------
+	# -----------------------------------------------------
 
 	health = max_health
 
-	# El enemigo buscará al jugador mediante este grupo.
 	add_to_group("player")
 
 	print(
@@ -82,29 +118,29 @@ func _ready() -> void:
 	)
 
 
-	# -------------------------
+	# -----------------------------------------------------
 	# COLISIONES
-	# -------------------------
+	# -----------------------------------------------------
 
-	# Player pertenece a Layer 1.
 	collision_layer = 1
 
-	# AttackArea no pertenece a ninguna Layer.
-	attack_area.collision_layer = 0
 
-	# AttackArea detecta enemigos de Layer 2.
+	# -----------------------------------------------------
+	# ATTACK AREA
+	# -----------------------------------------------------
+
+	attack_area.collision_layer = 0
 	attack_area.collision_mask = 2
 
 	attack_area.monitoring = true
 	attack_area.monitorable = true
 
-	# Hitbox apagada inicialmente.
 	attack_collision.disabled = true
 
 
-	# -------------------------
-	# SEÑALES
-	# -------------------------
+	# -----------------------------------------------------
+	# SIGNAL
+	# -----------------------------------------------------
 
 	if not attack_area.body_entered.is_connected(
 		_on_attack_area_body_entered
@@ -114,9 +150,9 @@ func _ready() -> void:
 		)
 
 
-	# -------------------------
+	# -----------------------------------------------------
 	# DEBUG
-	# -------------------------
+	# -----------------------------------------------------
 
 	_create_attack_debug()
 
@@ -128,32 +164,62 @@ func _ready() -> void:
 # =========================================================
 
 func _physics_process(delta: float) -> void:
-	# Si estamos muertos, no hacemos nada.
+
+	# -----------------------------------------------------
+	# MUERTO
+	# -----------------------------------------------------
+
 	if is_dead:
 		velocity = Vector2.ZERO
 		return
 
 
-	# -------------------------
-	# TIMERS DEL ATAQUE
-	# -------------------------
+	# -----------------------------------------------------
+	# TIMERS
+	# -----------------------------------------------------
 
 	_update_attack_timers(delta)
 
+	_update_dash_timers(delta)
 
-	# -------------------------
-	# INPUT
-	# -------------------------
 
-	var input_x := Input.get_axis(
+	# -----------------------------------------------------
+	# DETECTAR DOBLE TOQUE
+	# -----------------------------------------------------
+
+	_handle_dash_input()
+
+
+	# -----------------------------------------------------
+	# DASH ACTIVO
+	# -----------------------------------------------------
+
+	if is_dashing:
+
+		velocity = (
+			dash_direction
+			* dash_speed
+		)
+
+		move_and_slide()
+
+		return
+
+
+	# -----------------------------------------------------
+	# INPUT NORMAL
+	# -----------------------------------------------------
+
+	var input_x: float = Input.get_axis(
 		"move_left",
 		"move_right"
 	)
 
-	var input_y := Input.get_axis(
+	var input_y: float = Input.get_axis(
 		"move_up",
 		"move_down"
 	)
+
 
 	var direction := Vector2(
 		input_x,
@@ -161,126 +227,423 @@ func _physics_process(delta: float) -> void:
 	)
 
 
-	# -------------------------
+	# -----------------------------------------------------
 	# MOVIMIENTO ISOMÉTRICO
-	# -------------------------
+	# -----------------------------------------------------
 
 	var iso_direction := Vector2(
 		direction.x - direction.y,
 		(direction.x + direction.y) * 0.5
 	)
 
+
 	if iso_direction != Vector2.ZERO:
-		iso_direction = iso_direction.normalized()
 
-	velocity = iso_direction * speed
+		iso_direction = (
+			iso_direction.normalized()
+		)
 
 
-	# -------------------------
-	# DIRECCIÓN / ANIMACIONES
-	# -------------------------
+	velocity = (
+		iso_direction
+		* speed
+	)
+
+
+	# -----------------------------------------------------
+	# DIRECCIÓN Y ANIMACIÓN
+	# -----------------------------------------------------
 
 	if direction != Vector2.ZERO:
-		_update_facing(direction)
+
+		_update_facing(
+			direction
+		)
+
 		_play_walk()
+
 	else:
+
 		_play_idle()
 
 
-	# -------------------------
+	# -----------------------------------------------------
 	# ATAQUE
-	# -------------------------
+	# -----------------------------------------------------
 
-	if Input.is_action_just_pressed("attack"):
+	if Input.is_action_just_pressed(
+		"attack"
+	):
+
 		_try_attack()
 
 
+	# -----------------------------------------------------
+	# MOVIMIENTO
+	# -----------------------------------------------------
+
 	move_and_slide()
+
+
+# =========================================================
+# DASH - INPUT
+# =========================================================
+
+func _handle_dash_input() -> void:
+
+	# Solo procesamos una dirección por frame.
+
+	if Input.is_action_just_pressed(
+		"move_left"
+	):
+
+		_register_direction_tap(
+			"move_left",
+			Vector2(-1.0, 0.0)
+		)
+
+
+	elif Input.is_action_just_pressed(
+		"move_right"
+	):
+
+		_register_direction_tap(
+			"move_right",
+			Vector2(1.0, 0.0)
+		)
+
+
+	elif Input.is_action_just_pressed(
+		"move_up"
+	):
+
+		_register_direction_tap(
+			"move_up",
+			Vector2(0.0, -1.0)
+		)
+
+
+	elif Input.is_action_just_pressed(
+		"move_down"
+	):
+
+		_register_direction_tap(
+			"move_down",
+			Vector2(0.0, 1.0)
+		)
+
+
+# =========================================================
+# DASH - REGISTRAR TOQUE
+# =========================================================
+
+func _register_direction_tap(
+	action_name: String,
+	input_direction: Vector2
+) -> void:
+
+	# -----------------------------------------------------
+	# SEGUNDO TOQUE
+	# -----------------------------------------------------
+
+	if (
+		last_tap_action == action_name
+		and
+		double_tap_time_left > 0.0
+	):
+
+		last_tap_action = ""
+
+		double_tap_time_left = 0.0
+
+
+		# Si está disponible, ejecutamos dash.
+		if (
+			dash_cooldown_left <= 0.0
+			and
+			not is_dashing
+		):
+
+			_start_dash(
+				input_direction,
+				action_name
+			)
+
+
+		return
+
+
+	# -----------------------------------------------------
+	# PRIMER TOQUE
+	# -----------------------------------------------------
+
+	last_tap_action = action_name
+
+	double_tap_time_left = (
+		dash_double_tap_window
+	)
+
+
+# =========================================================
+# DASH - COMENZAR
+# =========================================================
+
+func _start_dash(
+	input_direction: Vector2,
+	action_name: String
+) -> void:
+
+	# Convertimos también el dash
+	# a la misma perspectiva isométrica.
+	var iso_dash_direction := Vector2(
+		input_direction.x
+		- input_direction.y,
+
+		(
+			input_direction.x
+			+ input_direction.y
+		) * 0.5
+	)
+
+
+	if iso_dash_direction == Vector2.ZERO:
+		return
+
+
+	iso_dash_direction = (
+		iso_dash_direction.normalized()
+	)
+
+
+	# -----------------------------------------------------
+	# ESTADO
+	# -----------------------------------------------------
+
+	is_dashing = true
+
+	dash_direction = (
+		iso_dash_direction
+	)
+
+	dash_time_left = (
+		dash_duration
+	)
+
+	dash_cooldown_left = (
+		dash_cooldown
+	)
+
+
+	# -----------------------------------------------------
+	# DIRECCIÓN VISUAL
+	# -----------------------------------------------------
+
+	_update_facing(
+		input_direction
+	)
+
+	_play_walk()
+
+
+	print(
+		"DASH: ",
+		action_name,
+		" | Dirección: ",
+		last_facing
+	)
+
+
+# =========================================================
+# DASH - TIMERS
+# =========================================================
+
+func _update_dash_timers(
+	delta: float
+) -> void:
+
+	# -----------------------------------------------------
+	# COOLDOWN
+	# -----------------------------------------------------
+
+	if dash_cooldown_left > 0.0:
+
+		dash_cooldown_left -= delta
+
+
+		if dash_cooldown_left < 0.0:
+
+			dash_cooldown_left = 0.0
+
+
+	# -----------------------------------------------------
+	# VENTANA DEL DOBLE TOQUE
+	# -----------------------------------------------------
+
+	if double_tap_time_left > 0.0:
+
+		double_tap_time_left -= delta
+
+
+		if double_tap_time_left <= 0.0:
+
+			double_tap_time_left = 0.0
+
+			last_tap_action = ""
+
+
+	# -----------------------------------------------------
+	# DURACIÓN DEL DASH
+	# -----------------------------------------------------
+
+	if is_dashing:
+
+		dash_time_left -= delta
+
+
+		if dash_time_left <= 0.0:
+
+			_finish_dash()
+
+
+# =========================================================
+# DASH - TERMINAR
+# =========================================================
+
+func _finish_dash() -> void:
+
+	is_dashing = false
+
+	dash_time_left = 0.0
+
+	dash_direction = Vector2.ZERO
+
+	velocity = Vector2.ZERO
+
+	_play_idle()
 
 
 # =========================================================
 # DIRECCIONES
 # =========================================================
 
-func _update_facing(direction: Vector2) -> void:
-	var x := direction.x
-	var y := direction.y
+func _update_facing(
+	direction: Vector2
+) -> void:
+
+	var x: float = direction.x
+	var y: float = direction.y
 
 
 	# W + D
 	if x > 0.0 and y < 0.0:
+
 		last_facing = "e"
 
 
 	# W + A
 	elif x < 0.0 and y < 0.0:
+
 		last_facing = "n"
 
 
 	# S + D
 	elif x > 0.0 and y > 0.0:
+
 		last_facing = "s"
 
 
 	# S + A
 	elif x < 0.0 and y > 0.0:
+
 		last_facing = "w"
 
 
 	# W
 	elif y < 0.0:
+
 		last_facing = "ne"
 
 
 	# S
 	elif y > 0.0:
+
 		last_facing = "sw"
 
 
 	# A
 	elif x < 0.0:
+
 		last_facing = "nw"
 
 
 	# D
 	elif x > 0.0:
+
 		last_facing = "se"
 
 
 # =========================================================
-# ANIMACIONES
+# IDLE
 # =========================================================
 
 func _play_idle() -> void:
-	var animation_name := "idle_" + last_facing
+
+	var animation_name: String = (
+		"idle_" + last_facing
+	)
+
 
 	if player_animated.sprite_frames.has_animation(
 		animation_name
 	):
-		if player_animated.animation != animation_name:
-			player_animated.play(animation_name)
 
+		if player_animated.animation != animation_name:
+
+			player_animated.play(
+				animation_name
+			)
+
+
+# =========================================================
+# WALK
+# =========================================================
 
 func _play_walk() -> void:
-	var animation_name := "walk_" + last_facing
 
-	# Si tenemos animación walk real:
+	var animation_name: String = (
+		"walk_" + last_facing
+	)
+
+
 	if player_animated.sprite_frames.has_animation(
 		animation_name
 	):
+
 		if player_animated.animation != animation_name:
-			player_animated.play(animation_name)
+
+			player_animated.play(
+				animation_name
+			)
 
 	else:
-		# Mientras no tengamos walk definitivo,
-		# usamos el idle correspondiente.
-		var idle_name := "idle_" + last_facing
+
+		# Placeholder mientras no tengamos
+		# las animaciones walk definitivas.
+
+		var idle_name: String = (
+			"idle_" + last_facing
+		)
+
 
 		if player_animated.sprite_frames.has_animation(
 			idle_name
 		):
+
 			if player_animated.animation != idle_name:
-				player_animated.play(idle_name)
+
+				player_animated.play(
+					idle_name
+				)
 
 
 # =========================================================
@@ -288,31 +651,39 @@ func _play_walk() -> void:
 # =========================================================
 
 func _try_attack() -> void:
+
 	if is_dead:
 		return
 
-	# Todavía está en cooldown.
+
+	if is_dashing:
+		return
+
+
 	if attack_cooldown_left > 0.0:
 		return
+
 
 	print(
 		"ATAQUE: ",
 		last_facing
 	)
 
-	attack_cooldown_left = attack_cooldown
-	attack_time_left = attack_duration
 
-	# Con cada nuevo ataque permitimos
-	# volver a golpear a los enemigos.
+	attack_cooldown_left = (
+		attack_cooldown
+	)
+
+	attack_time_left = (
+		attack_duration
+	)
+
+
 	hit_targets.clear()
+
 
 	_update_attack_area()
 
-
-	# -------------------------
-	# ACTIVAR HITBOX
-	# -------------------------
 
 	attack_collision.set_deferred(
 		"disabled",
@@ -320,11 +691,8 @@ func _try_attack() -> void:
 	)
 
 
-	# -------------------------
-	# DEBUG
-	# -------------------------
-
 	if show_attack_debug:
+
 		attack_debug.visible = true
 
 
@@ -332,34 +700,46 @@ func _try_attack() -> void:
 # TIMERS DEL ATAQUE
 # =========================================================
 
-func _update_attack_timers(delta: float) -> void:
-	# -------------------------
+func _update_attack_timers(
+	delta: float
+) -> void:
+
+	# -----------------------------------------------------
 	# COOLDOWN
-	# -------------------------
+	# -----------------------------------------------------
 
 	if attack_cooldown_left > 0.0:
+
 		attack_cooldown_left -= delta
 
+
 		if attack_cooldown_left < 0.0:
+
 			attack_cooldown_left = 0.0
 
 
-	# -------------------------
-	# DURACIÓN DE HITBOX
-	# -------------------------
+	# -----------------------------------------------------
+	# DURACIÓN HITBOX
+	# -----------------------------------------------------
 
 	if attack_time_left > 0.0:
+
 		attack_time_left -= delta
 
+
 		if attack_time_left <= 0.0:
+
 			attack_time_left = 0.0
+
 
 			attack_collision.set_deferred(
 				"disabled",
 				true
 			)
 
+
 			if attack_debug != null:
+
 				attack_debug.visible = false
 
 
@@ -368,12 +748,16 @@ func _update_attack_timers(delta: float) -> void:
 # =========================================================
 
 func _update_attack_area() -> void:
-	var attack_direction := Vector2.ZERO
+
+	var attack_direction := (
+		Vector2.ZERO
+	)
 
 
 	match last_facing:
 
 		"n":
+
 			attack_direction = Vector2(
 				0.0,
 				-1.0
@@ -381,6 +765,7 @@ func _update_attack_area() -> void:
 
 
 		"ne":
+
 			attack_direction = Vector2(
 				1.0,
 				-1.0
@@ -388,6 +773,7 @@ func _update_attack_area() -> void:
 
 
 		"e":
+
 			attack_direction = Vector2(
 				1.0,
 				0.0
@@ -395,6 +781,7 @@ func _update_attack_area() -> void:
 
 
 		"se":
+
 			attack_direction = Vector2(
 				1.0,
 				1.0
@@ -402,6 +789,7 @@ func _update_attack_area() -> void:
 
 
 		"s":
+
 			attack_direction = Vector2(
 				0.0,
 				1.0
@@ -409,6 +797,7 @@ func _update_attack_area() -> void:
 
 
 		"sw":
+
 			attack_direction = Vector2(
 				-1.0,
 				1.0
@@ -416,6 +805,7 @@ func _update_attack_area() -> void:
 
 
 		"w":
+
 			attack_direction = Vector2(
 				-1.0,
 				0.0
@@ -423,6 +813,7 @@ func _update_attack_area() -> void:
 
 
 		"nw":
+
 			attack_direction = Vector2(
 				-1.0,
 				-1.0
@@ -430,8 +821,10 @@ func _update_attack_area() -> void:
 
 
 	attack_area.position = (
-		attack_direction * attack_distance
+		attack_direction
+		* attack_distance
 	)
+
 
 	attack_area.rotation = (
 		attack_direction.angle()
@@ -439,7 +832,7 @@ func _update_attack_area() -> void:
 
 
 # =========================================================
-# DETECTAR IMPACTO
+# IMPACTO
 # =========================================================
 
 func _on_attack_area_body_entered(
@@ -452,33 +845,28 @@ func _on_attack_area_body_entered(
 	)
 
 
-	# -------------------------
-	# ¿HITBOX ACTIVA?
-	# -------------------------
-
 	if attack_time_left <= 0.0:
 		return
 
-
-	# -------------------------
-	# YA FUE GOLPEADO
-	# -------------------------
 
 	if body in hit_targets:
 		return
 
 
-	# -------------------------
-	# HACER DAÑO
-	# -------------------------
+	if body.has_method(
+		"take_damage"
+	):
 
-	if body.has_method("take_damage"):
-		hit_targets.append(body)
+		hit_targets.append(
+			body
+		)
+
 
 		body.take_damage(
 			attack_damage,
 			global_position
 		)
+
 
 		print(
 			"GOLPE CONFIRMADO | ",
@@ -488,6 +876,7 @@ func _on_attack_area_body_entered(
 		)
 
 	else:
+
 		print(
 			body.name,
 			" fue detectado pero NO tiene take_damage()"
@@ -498,17 +887,27 @@ func _on_attack_area_body_entered(
 # RECIBIR DAÑO
 # =========================================================
 
-func take_damage(amount: int) -> void:
+func take_damage(
+	amount: int
+) -> void:
+
 	if is_dead:
 		return
 
+
 	health -= amount
+
+
 	health = max(
 		health,
 		0
 	)
 
-	print("==============================")
+
+	print(
+		"=============================="
+	)
+
 	print(
 		"PLAYER RECIBE ",
 		amount,
@@ -521,32 +920,37 @@ func take_damage(amount: int) -> void:
 		" / ",
 		max_health
 	)
-	print("==============================")
 
-	# Si murió, ejecutamos la muerte directamente.
+	print(
+		"=============================="
+	)
+
+
 	if health <= 0:
+
 		_die()
+
 		return
 
-	# Solo hacemos flash si sigue vivo.
+
 	_flash_player_damage()
 
 
-	# -------------------------
-	# MUERTE
-	# -------------------------
-
-	if health <= 0:
-		_die()
-
-
 # =========================================================
-# FLASH DEL JUGADOR
+# ¿SIGUE VIVO?
 # =========================================================
+
 func is_alive() -> bool:
+
 	return not is_dead
 
+
+# =========================================================
+# FLASH DE DAÑO
+# =========================================================
+
 func _flash_player_damage() -> void:
+
 	player_animated.modulate = Color(
 		1.0,
 		0.20,
@@ -554,7 +958,9 @@ func _flash_player_damage() -> void:
 		1.0
 	)
 
+
 	var tween := create_tween()
+
 
 	tween.tween_property(
 		player_animated,
@@ -565,45 +971,63 @@ func _flash_player_damage() -> void:
 
 
 # =========================================================
-# MUERTE DEL JUGADOR
+# MUERTE
 # =========================================================
 
 func _die() -> void:
+
 	if is_dead:
 		return
 
+
 	is_dead = true
 
-	print("==============================")
-	print("PLAYER DERROTADO")
-	print("==============================")
+	is_dashing = false
 
 
-	# -------------------------
+	print(
+		"=============================="
+	)
+
+	print(
+		"PLAYER DERROTADO"
+	)
+
+	print(
+		"=============================="
+	)
+
+
+	# -----------------------------------------------------
 	# DETENER MOVIMIENTO
-	# -------------------------
+	# -----------------------------------------------------
 
 	velocity = Vector2.ZERO
 
+	dash_direction = Vector2.ZERO
 
-	# -------------------------
+
+	# -----------------------------------------------------
 	# APAGAR ATAQUE
-	# -------------------------
+	# -----------------------------------------------------
 
 	attack_time_left = 0.0
+
 
 	attack_collision.set_deferred(
 		"disabled",
 		true
 	)
 
+
 	if attack_debug != null:
+
 		attack_debug.visible = false
 
 
-	# -------------------------
-	# VISUAL PROVISIONAL DE MUERTE
-	# -------------------------
+	# -----------------------------------------------------
+	# VISUAL PROVISIONAL
+	# -----------------------------------------------------
 
 	player_animated.modulate = Color(
 		0.35,
@@ -612,21 +1036,21 @@ func _die() -> void:
 		1.0
 	)
 
-	# Cuando tengamos animación de muerte,
-	# reemplazaremos esto por death_s / death_n, etc.
-
 
 # =========================================================
-# HITBOX ROJA PROVISIONAL
+# HITBOX ROJA DE DEBUG
 # =========================================================
 
 func _create_attack_debug() -> void:
+
 	attack_debug = Polygon2D.new()
 
-	attack_debug.name = "AttackDebug"
+
+	attack_debug.name = (
+		"AttackDebug"
+	)
 
 
-	# Mismo tamaño que nuestro RectangleShape2D 70 x 45.
 	attack_debug.polygon = PackedVector2Array([
 		Vector2(-35.0, -22.5),
 		Vector2(35.0, -22.5),
@@ -642,7 +1066,9 @@ func _create_attack_debug() -> void:
 		0.45
 	)
 
+
 	attack_debug.visible = false
+
 
 	attack_area.add_child(
 		attack_debug
