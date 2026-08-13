@@ -16,7 +16,7 @@ extends CharacterBody2D
 @export var dash_duration: float = 0.14
 @export var dash_cooldown: float = 0.40
 
-# Tiempo máximo entre el primer y segundo toque.
+# Tiempo máximo entre dos pulsaciones.
 @export var dash_double_tap_window: float = 0.25
 
 
@@ -56,9 +56,13 @@ var is_dead: bool = false
 
 
 # =========================================================
-# ESTADO DE DIRECCIÓN
+# APUNTADO
 # =========================================================
 
+# Dirección exacta desde Player hacia mouse.
+var aim_direction: Vector2 = Vector2.DOWN
+
+# Orientación visual de las 8 disponibles.
 var last_facing: String = "s"
 
 
@@ -83,7 +87,6 @@ var is_dashing: bool = false
 var dash_direction: Vector2 = Vector2.ZERO
 
 var dash_time_left: float = 0.0
-
 var dash_cooldown_left: float = 0.0
 
 
@@ -145,6 +148,7 @@ func _ready() -> void:
 	if not attack_area.body_entered.is_connected(
 		_on_attack_area_body_entered
 	):
+
 		attack_area.body_entered.connect(
 			_on_attack_area_body_entered
 		)
@@ -155,6 +159,13 @@ func _ready() -> void:
 	# -----------------------------------------------------
 
 	_create_attack_debug()
+
+
+	# -----------------------------------------------------
+	# APUNTADO INICIAL
+	# -----------------------------------------------------
+
+	_update_aim_from_mouse()
 
 	_play_idle()
 
@@ -170,7 +181,9 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if is_dead:
+
 		velocity = Vector2.ZERO
+
 		return
 
 
@@ -184,7 +197,18 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# DETECTAR DOBLE TOQUE
+	# APUNTADO CON MOUSE
+	# -----------------------------------------------------
+
+	# Mientras la hitbox de un ataque está activa,
+	# mantenemos brevemente bloqueada esa orientación.
+	if attack_time_left <= 0.0:
+
+		_update_aim_from_mouse()
+
+
+	# -----------------------------------------------------
+	# DETECTAR DASH
 	# -----------------------------------------------------
 
 	_handle_dash_input()
@@ -195,6 +219,10 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if is_dashing:
+
+		# Podemos seguir mirando con el mouse mientras
+		# nos desplazamos en otra dirección.
+		_play_walk()
 
 		velocity = (
 			dash_direction
@@ -207,7 +235,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# INPUT NORMAL
+	# INPUT DE MOVIMIENTO
 	# -----------------------------------------------------
 
 	var input_x: float = Input.get_axis(
@@ -221,7 +249,7 @@ func _physics_process(delta: float) -> void:
 	)
 
 
-	var direction := Vector2(
+	var movement_input: Vector2 = Vector2(
 		input_x,
 		input_y
 	)
@@ -231,9 +259,13 @@ func _physics_process(delta: float) -> void:
 	# MOVIMIENTO ISOMÉTRICO
 	# -----------------------------------------------------
 
-	var iso_direction := Vector2(
-		direction.x - direction.y,
-		(direction.x + direction.y) * 0.5
+	var iso_direction: Vector2 = Vector2(
+		movement_input.x - movement_input.y,
+
+		(
+			movement_input.x
+			+ movement_input.y
+		) * 0.5
 	)
 
 
@@ -251,14 +283,16 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# DIRECCIÓN Y ANIMACIÓN
+	# ANIMACIÓN
 	# -----------------------------------------------------
 
-	if direction != Vector2.ZERO:
+	# IMPORTANTE:
+	#
+	# WASD ya NO cambia last_facing.
+	#
+	# last_facing depende exclusivamente del mouse.
 
-		_update_facing(
-			direction
-		)
+	if movement_input != Vector2.ZERO:
 
 		_play_walk()
 
@@ -286,12 +320,159 @@ func _physics_process(delta: float) -> void:
 
 
 # =========================================================
+# APUNTADO CON MOUSE
+# =========================================================
+
+func _update_aim_from_mouse() -> void:
+
+	var mouse_position: Vector2 = (
+		get_global_mouse_position()
+	)
+
+
+	var direction_to_mouse: Vector2 = (
+		mouse_position
+		- global_position
+	)
+
+
+	# Evitamos problemas si el cursor está
+	# exactamente encima del Player.
+	if direction_to_mouse.length_squared() < 4.0:
+
+		return
+
+
+	aim_direction = (
+		direction_to_mouse.normalized()
+	)
+
+
+	_update_facing_from_aim(
+		aim_direction
+	)
+
+
+# =========================================================
+# CONVERTIR MOUSE A 8 DIRECCIONES
+# =========================================================
+
+func _update_facing_from_aim(
+	direction: Vector2
+) -> void:
+
+	var angle_degrees: float = (
+		rad_to_deg(
+			direction.angle()
+		)
+	)
+
+
+	# -----------------------------------------------------
+	# ESTE
+	# -----------------------------------------------------
+
+	if (
+		angle_degrees >= -22.5
+		and
+		angle_degrees < 22.5
+	):
+
+		last_facing = "e"
+
+
+	# -----------------------------------------------------
+	# SURESTE
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= 22.5
+		and
+		angle_degrees < 67.5
+	):
+
+		last_facing = "se"
+
+
+	# -----------------------------------------------------
+	# SUR
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= 67.5
+		and
+		angle_degrees < 112.5
+	):
+
+		last_facing = "s"
+
+
+	# -----------------------------------------------------
+	# SUROESTE
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= 112.5
+		and
+		angle_degrees < 157.5
+	):
+
+		last_facing = "sw"
+
+
+	# -----------------------------------------------------
+	# OESTE
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= 157.5
+		or
+		angle_degrees < -157.5
+	):
+
+		last_facing = "w"
+
+
+	# -----------------------------------------------------
+	# NOROESTE
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= -157.5
+		and
+		angle_degrees < -112.5
+	):
+
+		last_facing = "nw"
+
+
+	# -----------------------------------------------------
+	# NORTE
+	# -----------------------------------------------------
+
+	elif (
+		angle_degrees >= -112.5
+		and
+		angle_degrees < -67.5
+	):
+
+		last_facing = "n"
+
+
+	# -----------------------------------------------------
+	# NORESTE
+	# -----------------------------------------------------
+
+	else:
+
+		last_facing = "ne"
+
+
+# =========================================================
 # DASH - INPUT
 # =========================================================
 
 func _handle_dash_input() -> void:
-
-	# Solo procesamos una dirección por frame.
 
 	if Input.is_action_just_pressed(
 		"move_left"
@@ -357,7 +538,6 @@ func _register_direction_tap(
 		double_tap_time_left = 0.0
 
 
-		# Si está disponible, ejecutamos dash.
 		if (
 			dash_cooldown_left <= 0.0
 			and
@@ -393,9 +573,12 @@ func _start_dash(
 	action_name: String
 ) -> void:
 
-	# Convertimos también el dash
-	# a la misma perspectiva isométrica.
-	var iso_dash_direction := Vector2(
+	# IMPORTANTE:
+	#
+	# El dash depende de WASD.
+	# NO depende del mouse.
+
+	var iso_dash_direction: Vector2 = Vector2(
 		input_direction.x
 		- input_direction.y,
 
@@ -407,6 +590,7 @@ func _start_dash(
 
 
 	if iso_dash_direction == Vector2.ZERO:
+
 		return
 
 
@@ -414,10 +598,6 @@ func _start_dash(
 		iso_dash_direction.normalized()
 	)
 
-
-	# -----------------------------------------------------
-	# ESTADO
-	# -----------------------------------------------------
 
 	is_dashing = true
 
@@ -434,13 +614,8 @@ func _start_dash(
 	)
 
 
-	# -----------------------------------------------------
-	# DIRECCIÓN VISUAL
-	# -----------------------------------------------------
-
-	_update_facing(
-		input_direction
-	)
+	# NO modificamos last_facing.
+	# El personaje sigue mirando al mouse.
 
 	_play_walk()
 
@@ -448,7 +623,7 @@ func _start_dash(
 	print(
 		"DASH: ",
 		action_name,
-		" | Dirección: ",
+		" | Mirando: ",
 		last_facing
 	)
 
@@ -476,7 +651,7 @@ func _update_dash_timers(
 
 
 	# -----------------------------------------------------
-	# VENTANA DEL DOBLE TOQUE
+	# DOBLE TOQUE
 	# -----------------------------------------------------
 
 	if double_tap_time_left > 0.0:
@@ -492,7 +667,7 @@ func _update_dash_timers(
 
 
 	# -----------------------------------------------------
-	# DURACIÓN DEL DASH
+	# DURACIÓN DASH
 	# -----------------------------------------------------
 
 	if is_dashing:
@@ -506,7 +681,7 @@ func _update_dash_timers(
 
 
 # =========================================================
-# DASH - TERMINAR
+# DASH - FINALIZAR
 # =========================================================
 
 func _finish_dash() -> void:
@@ -519,71 +694,13 @@ func _finish_dash() -> void:
 
 	velocity = Vector2.ZERO
 
-	_play_idle()
+
+	# La animación correcta se decide en el
+	# siguiente physics frame.
 
 
 # =========================================================
-# DIRECCIONES
-# =========================================================
-
-func _update_facing(
-	direction: Vector2
-) -> void:
-
-	var x: float = direction.x
-	var y: float = direction.y
-
-
-	# W + D
-	if x > 0.0 and y < 0.0:
-
-		last_facing = "e"
-
-
-	# W + A
-	elif x < 0.0 and y < 0.0:
-
-		last_facing = "n"
-
-
-	# S + D
-	elif x > 0.0 and y > 0.0:
-
-		last_facing = "s"
-
-
-	# S + A
-	elif x < 0.0 and y > 0.0:
-
-		last_facing = "w"
-
-
-	# W
-	elif y < 0.0:
-
-		last_facing = "ne"
-
-
-	# S
-	elif y > 0.0:
-
-		last_facing = "sw"
-
-
-	# A
-	elif x < 0.0:
-
-		last_facing = "nw"
-
-
-	# D
-	elif x > 0.0:
-
-		last_facing = "se"
-
-
-# =========================================================
-# IDLE
+# ANIMACIÓN IDLE
 # =========================================================
 
 func _play_idle() -> void:
@@ -605,7 +722,7 @@ func _play_idle() -> void:
 
 
 # =========================================================
-# WALK
+# ANIMACIÓN WALK
 # =========================================================
 
 func _play_walk() -> void:
@@ -625,10 +742,11 @@ func _play_walk() -> void:
 				animation_name
 			)
 
+
 	else:
 
 		# Placeholder mientras no tengamos
-		# las animaciones walk definitivas.
+		# walk definitivo.
 
 		var idle_name: String = (
 			"idle_" + last_facing
@@ -662,6 +780,12 @@ func _try_attack() -> void:
 
 	if attack_cooldown_left > 0.0:
 		return
+
+
+	# La dirección del ataque queda determinada
+	# por el mouse en este instante.
+
+	_update_aim_from_mouse()
 
 
 	print(
@@ -704,10 +828,6 @@ func _update_attack_timers(
 	delta: float
 ) -> void:
 
-	# -----------------------------------------------------
-	# COOLDOWN
-	# -----------------------------------------------------
-
 	if attack_cooldown_left > 0.0:
 
 		attack_cooldown_left -= delta
@@ -717,10 +837,6 @@ func _update_attack_timers(
 
 			attack_cooldown_left = 0.0
 
-
-	# -----------------------------------------------------
-	# DURACIÓN HITBOX
-	# -----------------------------------------------------
 
 	if attack_time_left > 0.0:
 
@@ -744,80 +860,14 @@ func _update_attack_timers(
 
 
 # =========================================================
-# POSICIÓN DEL ATAQUE
+# ATAQUE SEGÚN ORIENTACIÓN DEL MOUSE
 # =========================================================
 
 func _update_attack_area() -> void:
 
-	var attack_direction := (
-		Vector2.ZERO
+	var attack_direction: Vector2 = (
+		_get_facing_direction()
 	)
-
-
-	match last_facing:
-
-		"n":
-
-			attack_direction = Vector2(
-				0.0,
-				-1.0
-			)
-
-
-		"ne":
-
-			attack_direction = Vector2(
-				1.0,
-				-1.0
-			).normalized()
-
-
-		"e":
-
-			attack_direction = Vector2(
-				1.0,
-				0.0
-			)
-
-
-		"se":
-
-			attack_direction = Vector2(
-				1.0,
-				1.0
-			).normalized()
-
-
-		"s":
-
-			attack_direction = Vector2(
-				0.0,
-				1.0
-			)
-
-
-		"sw":
-
-			attack_direction = Vector2(
-				-1.0,
-				1.0
-			).normalized()
-
-
-		"w":
-
-			attack_direction = Vector2(
-				-1.0,
-				0.0
-			)
-
-
-		"nw":
-
-			attack_direction = Vector2(
-				-1.0,
-				-1.0
-			).normalized()
 
 
 	attack_area.position = (
@@ -829,6 +879,81 @@ func _update_attack_area() -> void:
 	attack_area.rotation = (
 		attack_direction.angle()
 	)
+
+
+# =========================================================
+# CONVERTIR FACING A VECTOR
+# =========================================================
+
+func _get_facing_direction() -> Vector2:
+
+	match last_facing:
+
+		"n":
+
+			return Vector2(
+				0.0,
+				-1.0
+			)
+
+
+		"ne":
+
+			return Vector2(
+				1.0,
+				-1.0
+			).normalized()
+
+
+		"e":
+
+			return Vector2(
+				1.0,
+				0.0
+			)
+
+
+		"se":
+
+			return Vector2(
+				1.0,
+				1.0
+			).normalized()
+
+
+		"s":
+
+			return Vector2(
+				0.0,
+				1.0
+			)
+
+
+		"sw":
+
+			return Vector2(
+				-1.0,
+				1.0
+			).normalized()
+
+
+		"w":
+
+			return Vector2(
+				-1.0,
+				0.0
+			)
+
+
+		"nw":
+
+			return Vector2(
+				-1.0,
+				-1.0
+			).normalized()
+
+
+	return Vector2.DOWN
 
 
 # =========================================================
@@ -846,10 +971,12 @@ func _on_attack_area_body_entered(
 
 
 	if attack_time_left <= 0.0:
+
 		return
 
 
 	if body in hit_targets:
+
 		return
 
 
@@ -875,6 +1002,7 @@ func _on_attack_area_body_entered(
 			attack_damage
 		)
 
+
 	else:
 
 		print(
@@ -892,6 +1020,7 @@ func take_damage(
 ) -> void:
 
 	if is_dead:
+
 		return
 
 
@@ -959,7 +1088,7 @@ func _flash_player_damage() -> void:
 	)
 
 
-	var tween := create_tween()
+	var tween: Tween = create_tween()
 
 
 	tween.tween_property(
@@ -977,6 +1106,7 @@ func _flash_player_damage() -> void:
 func _die() -> void:
 
 	if is_dead:
+
 		return
 
 
@@ -998,18 +1128,10 @@ func _die() -> void:
 	)
 
 
-	# -----------------------------------------------------
-	# DETENER MOVIMIENTO
-	# -----------------------------------------------------
-
 	velocity = Vector2.ZERO
 
 	dash_direction = Vector2.ZERO
 
-
-	# -----------------------------------------------------
-	# APAGAR ATAQUE
-	# -----------------------------------------------------
 
 	attack_time_left = 0.0
 
@@ -1025,10 +1147,6 @@ func _die() -> void:
 		attack_debug.visible = false
 
 
-	# -----------------------------------------------------
-	# VISUAL PROVISIONAL
-	# -----------------------------------------------------
-
 	player_animated.modulate = Color(
 		0.35,
 		0.35,
@@ -1038,7 +1156,7 @@ func _die() -> void:
 
 
 # =========================================================
-# HITBOX ROJA DE DEBUG
+# HITBOX ROJA DEBUG
 # =========================================================
 
 func _create_attack_debug() -> void:
