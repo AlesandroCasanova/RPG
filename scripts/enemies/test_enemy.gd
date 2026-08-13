@@ -34,7 +34,7 @@ extends CharacterBody2D
 # Distancia de los enemigos que están esperando.
 @export var waiting_slot_radius: float = 115.0
 
-# Margen para considerar que llegó a su posición.
+# Margen del sistema de slots.
 @export var combat_slot_tolerance: float = 25.0
 
 
@@ -64,8 +64,9 @@ extends CharacterBody2D
 
 @onready var health_bar: ProgressBar = $HealthBar
 
-@onready var navigation_agent: NavigationAgent2D = \
+@onready var navigation_agent: NavigationAgent2D = (
 	$NavigationAgent2D
+)
 
 
 # =========================================================
@@ -126,11 +127,13 @@ func _ready() -> void:
 
 
 	if player == null:
+
 		print(
 			"ERROR: TestEnemy no encontró al Player"
 		)
 
 	else:
+
 		print(
 			"ENEMIGO: Player encontrado"
 		)
@@ -196,9 +199,12 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if attack_cooldown_left > 0.0:
+
 		attack_cooldown_left -= delta
 
+
 		if attack_cooldown_left < 0.0:
+
 			attack_cooldown_left = 0.0
 
 
@@ -207,21 +213,30 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if knockback_velocity != Vector2.ZERO:
+
 		wants_navigation_movement = false
 
-		navigation_agent.velocity = Vector2.ZERO
+		navigation_agent.velocity = (
+			Vector2.ZERO
+		)
 
 		velocity = knockback_velocity
 
 		move_and_slide()
 
-		knockback_velocity = knockback_velocity.move_toward(
-			Vector2.ZERO,
-			knockback_friction * delta
+
+		knockback_velocity = (
+			knockback_velocity.move_toward(
+				Vector2.ZERO,
+				knockback_friction * delta
+			)
 		)
 
+
 		if knockback_velocity.length() < 1.0:
+
 			knockback_velocity = Vector2.ZERO
+
 
 		return
 
@@ -231,7 +246,9 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if not is_instance_valid(player):
+
 		_stop_navigation()
+
 		return
 
 
@@ -240,8 +257,11 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if player.has_method("is_alive"):
+
 		if not player.is_alive():
+
 			_stop_navigation()
+
 			return
 
 
@@ -249,8 +269,10 @@ func _physics_process(delta: float) -> void:
 	# DISTANCIA AL PLAYER
 	# -----------------------------------------------------
 
-	var distance_to_player: float = global_position.distance_to(
-		player.global_position
+	var distance_to_player: float = (
+		global_position.distance_to(
+			player.global_position
+		)
 	)
 
 
@@ -259,46 +281,55 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if distance_to_player > detection_range:
+
 		_stop_navigation()
+
 		return
 
 
 	# -----------------------------------------------------
-	# OBTENER INFORMACIÓN DE COMBATE
+	# INFORMACIÓN DE COMBATE
 	# -----------------------------------------------------
 
-	var combat_info: Dictionary = _get_combat_info()
+	var combat_info: Dictionary = (
+		_get_combat_info()
+	)
 
-	var combat_position: Vector2 = combat_info["position"]
 
-	var can_attack: bool = combat_info["can_attack"]
+	var combat_position: Vector2 = (
+		combat_info["position"]
+	)
 
-	var distance_to_combat_position: float = (
-		global_position.distance_to(
-			combat_position
-		)
+
+	var can_attack: bool = (
+		combat_info["can_attack"]
 	)
 
 
 	# -----------------------------------------------------
-	# ESTE ENEMIGO TIENE TURNO DE ATAQUE
+	# TIENE CUPO DE ATAQUE
 	# -----------------------------------------------------
 
 	if can_attack:
 
-		# Ya no exigimos que esté exactamente
-		# sobre su slot de combate.
+		# Si ya está suficientemente cerca del jugador,
+		# ataca aunque avoidance no le permita colocarse
+		# exactamente en el slot matemático.
 		if distance_to_player <= attack_range:
+
 			_stop_navigation()
 
+
 			if attack_cooldown_left <= 0.0:
+
 				_attack_player()
+
 
 			return
 
 
 	# -----------------------------------------------------
-	# IR A SU POSICIÓN ASIGNADA
+	# IR A LA POSICIÓN ASIGNADA
 	# -----------------------------------------------------
 
 	_move_toward_position(
@@ -322,18 +353,18 @@ func _move_toward_position(
 	)
 
 
-	var next_path_position := (
+	var next_path_position: Vector2 = (
 		navigation_agent.get_next_path_position()
 	)
 
 
-	var direction_to_next_point := (
+	var direction_to_next_point: Vector2 = (
 		next_path_position
 		- global_position
 	).normalized()
 
 
-	var desired_velocity := (
+	var desired_velocity: Vector2 = (
 		direction_to_next_point
 		* move_speed
 	)
@@ -362,28 +393,34 @@ func _get_combat_info() -> Dictionary:
 
 
 	if active_enemies.is_empty():
+
 		return result
 
 
 	# -----------------------------------------------------
-	# ORDEN ESTABLE
+	# LOS MÁS CERCANOS TIENEN PRIORIDAD DE ATAQUE
 	# -----------------------------------------------------
 
 	active_enemies.sort_custom(
-		_sort_enemies_by_id
+		_sort_enemies_by_distance_to_player
 	)
 
 
-	var my_index: int = active_enemies.find(
-		self
+	var my_index: int = (
+		active_enemies.find(
+			self
+		)
 	)
 
 
 	if my_index < 0:
+
 		return result
 
 
-	var enemy_count: int = active_enemies.size()
+	var enemy_count: int = (
+		active_enemies.size()
+	)
 
 
 	# =====================================================
@@ -408,24 +445,29 @@ func _get_combat_info() -> Dictionary:
 	if can_attack:
 
 		var angle_step: float = (
-			TAU / float(attacker_count)
+			TAU
+			/ float(attacker_count)
 		)
 
 
 		var angle: float = (
 			-PI / 2.0
-			+ angle_step * float(my_index)
+			+ angle_step
+			* float(my_index)
 		)
 
 
 		var direction: Vector2 = (
-			Vector2.RIGHT.rotated(angle)
+			Vector2.RIGHT.rotated(
+				angle
+			)
 		)
 
 
 		result["position"] = (
 			player.global_position
-			+ direction * attack_slot_radius
+			+ direction
+			* attack_slot_radius
 		)
 
 
@@ -440,34 +482,40 @@ func _get_combat_info() -> Dictionary:
 	# =====================================================
 
 	var waiting_index: int = (
-		my_index - attacker_count
+		my_index
+		- attacker_count
 	)
 
 
 	var waiting_count: int = (
-		enemy_count - attacker_count
+		enemy_count
+		- attacker_count
 	)
 
 
 	if waiting_count <= 0:
+
 		return result
 
 
 	var waiting_angle_step: float = (
-		TAU / float(waiting_count)
+		TAU
+		/ float(waiting_count)
 	)
 
 
-	# Segunda línea rotada para que no coincida
-	# exactamente con los atacantes.
+	# Rotamos la segunda línea para evitar que
+	# coincida exactamente con los atacantes.
 	var waiting_start_angle: float = (
-		-PI / 2.0 + PI / 4.0
+		-PI / 2.0
+		+ PI / 4.0
 	)
 
 
 	var waiting_angle: float = (
 		waiting_start_angle
-		+ waiting_angle_step * float(waiting_index)
+		+ waiting_angle_step
+		* float(waiting_index)
 	)
 
 
@@ -480,7 +528,8 @@ func _get_combat_info() -> Dictionary:
 
 	result["position"] = (
 		player.global_position
-		+ waiting_direction * waiting_slot_radius
+		+ waiting_direction
+		* waiting_slot_radius
 	)
 
 
@@ -496,7 +545,7 @@ func _get_combat_info() -> Dictionary:
 
 func _get_active_enemies() -> Array[Node]:
 
-	var all_enemies := (
+	var all_enemies: Array[Node] = (
 		get_tree().get_nodes_in_group(
 			"enemies"
 		)
@@ -506,31 +555,41 @@ func _get_active_enemies() -> Array[Node]:
 	var active_enemies: Array[Node] = []
 
 
-	for enemy in all_enemies:
+	for enemy: Node in all_enemies:
 
 		if not is_instance_valid(enemy):
+
 			continue
 
 
 		if not enemy is Node2D:
+
 			continue
 
 
-		# Ignorar muertos.
-		if enemy.has_method("is_enemy_alive"):
+		# -------------------------------------------------
+		# IGNORAR MUERTOS
+		# -------------------------------------------------
+
+		if enemy.has_method(
+			"is_enemy_alive"
+		):
 
 			if not enemy.is_enemy_alive():
+
 				continue
 
 
-		var enemy_2d := (
+		var enemy_2d: Node2D = (
 			enemy as Node2D
 		)
 
 
-		# Solo enemigos que participan
-		# actualmente en esta pelea.
-		var distance := (
+		# -------------------------------------------------
+		# SOLO ENEMIGOS DE ESTA PELEA
+		# -------------------------------------------------
+
+		var distance: float = (
 			enemy_2d.global_position.distance_to(
 				player.global_position
 			)
@@ -548,18 +607,63 @@ func _get_active_enemies() -> Array[Node]:
 
 
 # =========================================================
-# ORDENAR ENEMIGOS
+# ORDENAR ENEMIGOS POR DISTANCIA AL PLAYER
 # =========================================================
 
-func _sort_enemies_by_id(
+func _sort_enemies_by_distance_to_player(
 	a: Node,
 	b: Node
 ) -> bool:
 
+	if not is_instance_valid(player):
+
+		return false
+
+
+	var enemy_a: Node2D = (
+		a as Node2D
+	)
+
+
+	var enemy_b: Node2D = (
+		b as Node2D
+	)
+
+
+	var distance_a: float = (
+		enemy_a.global_position.distance_squared_to(
+			player.global_position
+		)
+	)
+
+
+	var distance_b: float = (
+		enemy_b.global_position.distance_squared_to(
+			player.global_position
+		)
+	)
+
+
+	# -----------------------------------------------------
+	# EMPATE
+	# -----------------------------------------------------
+
+	# Si están prácticamente a la misma distancia,
+	# usamos el instance ID para mantener el orden estable.
+	if absf(
+		distance_a - distance_b
+	) < 1.0:
+
+		return (
+			a.get_instance_id()
+			<
+			b.get_instance_id()
+		)
+
+
+	# El más cercano va primero.
 	return (
-		a.get_instance_id()
-		<
-		b.get_instance_id()
+		distance_a < distance_b
 	)
 
 
@@ -581,24 +685,29 @@ func _on_navigation_agent_velocity_computed(
 ) -> void:
 
 	if health <= 0:
+
 		return
 
 
 	if not wants_navigation_movement:
+
 		return
 
 
 	if knockback_velocity != Vector2.ZERO:
+
 		return
 
 
 	if not is_instance_valid(player):
+
 		return
 
 
 	if player.has_method("is_alive"):
 
 		if not player.is_alive():
+
 			return
 
 
@@ -617,6 +726,7 @@ func _stop_navigation() -> void:
 
 	velocity = Vector2.ZERO
 
+
 	navigation_agent.velocity = (
 		Vector2.ZERO
 	)
@@ -629,12 +739,14 @@ func _stop_navigation() -> void:
 func _attack_player() -> void:
 
 	if not is_instance_valid(player):
+
 		return
 
 
 	if player.has_method("is_alive"):
 
 		if not player.is_alive():
+
 			return
 
 
@@ -651,7 +763,9 @@ func _attack_player() -> void:
 	_attack_flash()
 
 
-	if player.has_method("take_damage"):
+	if player.has_method(
+		"take_damage"
+	):
 
 		player.take_damage(
 			attack_damage
@@ -672,7 +786,9 @@ func _attack_flash() -> void:
 	)
 
 
-	var tween := create_tween()
+	var tween: Tween = (
+		create_tween()
+	)
 
 
 	tween.tween_property(
@@ -693,19 +809,22 @@ func take_damage(
 ) -> void:
 
 	if health <= 0:
+
 		return
 
 
 	health -= amount
 
 
-	health = max(
+	health = maxi(
 		health,
 		0
 	)
 
 
-	health_bar.value = health
+	health_bar.value = (
+		health
+	)
 
 
 	print(
@@ -766,11 +885,13 @@ func _show_damage_number(
 	amount: int
 ) -> void:
 
-	var damage_label := Label.new()
+	var damage_label: Label = (
+		Label.new()
+	)
 
 
-	damage_label.text = str(
-		amount
+	damage_label.text = (
+		str(amount)
 	)
 
 
@@ -830,7 +951,9 @@ func _show_damage_number(
 	)
 
 
-	var tween := create_tween()
+	var tween: Tween = (
+		create_tween()
+	)
 
 
 	tween.set_parallel(
@@ -838,7 +961,10 @@ func _show_damage_number(
 	)
 
 
-	# Número sube.
+	# -----------------------------------------------------
+	# SUBE
+	# -----------------------------------------------------
+
 	tween.tween_property(
 		damage_label,
 		"position",
@@ -851,7 +977,10 @@ func _show_damage_number(
 	)
 
 
-	# Número desaparece.
+	# -----------------------------------------------------
+	# DESAPARECE
+	# -----------------------------------------------------
+
 	tween.tween_property(
 		damage_label,
 		"modulate:a",
@@ -886,7 +1015,9 @@ func _flash_damage() -> void:
 	)
 
 
-	var tween := create_tween()
+	var tween: Tween = (
+		create_tween()
+	)
 
 
 	tween.tween_property(
@@ -905,7 +1036,7 @@ func _apply_knockback(
 	attacker_position: Vector2
 ) -> void:
 
-	var direction := (
+	var direction: Vector2 = (
 		global_position
 		- attacker_position
 	).normalized()
@@ -938,11 +1069,19 @@ func die() -> void:
 
 	wants_navigation_movement = false
 
+
 	navigation_agent.avoidance_enabled = (
 		false
 	)
 
+
+	navigation_agent.velocity = (
+		Vector2.ZERO
+	)
+
+
 	velocity = Vector2.ZERO
+
 
 	knockback_velocity = (
 		Vector2.ZERO

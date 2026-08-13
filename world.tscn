@@ -311,8 +311,14 @@ animations = [{
 radius = 20.0
 height = 40.0
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5k8t"]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_pkg7o"]
 size = Vector2(70, 45)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5k8t"]
+size = Vector2(90, 65)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_gbfbk"]
+size = Vector2(75, 170)
 
 [node name="World" type="Node2D" unique_id=1871762989]
 
@@ -346,7 +352,7 @@ shape = SubResource("RectangleShape2D_wcd18")
 vertices = PackedVector2Array(-30, -36, -33, 9, 33, 14, 30, -34)
 
 [node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
-position = Vector2(668, 449)
+position = Vector2(1079, 513)
 script = ExtResource("1_f3sb7")
 
 [node name="PlayerAnimated" type="AnimatedSprite2D" parent="Environment/Player" unique_id=1691476645]
@@ -377,13 +383,31 @@ position = Vector2(-3, -46)
 position_smoothing_enabled = true
 position_smoothing_speed = 7.0
 
-[node name="AttackArea" type="Area2D" parent="Environment/Player" unique_id=2000753498]
+[node name="NormalAttackArea" type="Area2D" parent="Environment/Player" unique_id=2000753498]
 position = Vector2(-668, -449)
 collision_layer = 0
 collision_mask = 2
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/AttackArea" unique_id=1496730035]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/NormalAttackArea" unique_id=1496730035]
+shape = SubResource("RectangleShape2D_pkg7o")
+disabled = true
+
+[node name="HeavyAttackArea" type="Area2D" parent="Environment/Player" unique_id=1847968650]
+position = Vector2(-668, -449)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/HeavyAttackArea" unique_id=478147611]
 shape = SubResource("RectangleShape2D_s5k8t")
+disabled = true
+
+[node name="ChargedAttackArea" type="Area2D" parent="Environment/Player" unique_id=113026706]
+position = Vector2(-668, -449)
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/ChargedAttackArea" unique_id=756549387]
+shape = SubResource("RectangleShape2D_gbfbk")
 disabled = true
 
 [node name="TestEnemy" parent="Environment" unique_id=753756473 instance=ExtResource("6_pkg7o")]
@@ -393,6 +417,21 @@ position = Vector2(534, 438)
 position = Vector2(696, 332)
 
 [node name="TestEnemy3" parent="Environment" unique_id=278465869 instance=ExtResource("6_pkg7o")]
+position = Vector2(582, 552)
+
+[node name="TestEnemy4" parent="Environment" unique_id=380728016 instance=ExtResource("6_pkg7o")]
+position = Vector2(582, 552)
+
+[node name="TestEnemy5" parent="Environment" unique_id=166988120 instance=ExtResource("6_pkg7o")]
+position = Vector2(582, 552)
+
+[node name="TestEnemy6" parent="Environment" unique_id=755120559 instance=ExtResource("6_pkg7o")]
+position = Vector2(582, 552)
+
+[node name="TestEnemy7" parent="Environment" unique_id=1706655457 instance=ExtResource("6_pkg7o")]
+position = Vector2(582, 552)
+
+[node name="TestEnemy8" parent="Environment" unique_id=732616050 instance=ExtResource("6_pkg7o")]
 position = Vector2(582, 552)
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=497129756]
@@ -416,3 +455,19 @@ text = "100 / 100
 "
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="StaminaBar" type="ProgressBar" parent="HUD" unique_id=1565764175]
+modulate = Color(0, 1, 0, 1)
+offset_left = 12.0
+offset_top = 48.0
+offset_right = 272.0
+offset_bottom = 75.0
+value = 100.0
+show_percentage = false
+
+[node name="StaminaLabel" type="Label" parent="HUD" unique_id=1859275733]
+offset_left = 107.0
+offset_top = 50.0
+offset_right = 177.0
+offset_bottom = 73.0
+text = "100 / 100"

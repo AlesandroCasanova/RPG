@@ -1,39 +1,64 @@
 extends CanvasLayer
 
 
+# =========================================================
+# NODOS
+# =========================================================
+
 @onready var health_bar: ProgressBar = $PlayerHealthBar
 @onready var health_label: Label = $HealthLabel
 
+@onready var stamina_bar: ProgressBar = $StaminaBar
+@onready var stamina_label: Label = $StaminaLabel
 
-var player: CharacterBody2D
 
+# =========================================================
+# PLAYER
+# =========================================================
+
+var player: CharacterBody2D = null
+
+
+# =========================================================
+# READY
+# =========================================================
 
 func _ready() -> void:
-	player = get_tree().get_first_node_in_group(
-		"player"
-	) as CharacterBody2D
-
-	if player == null:
-		print("HUD: Player no encontrado")
-	else:
-		print("HUD: Player encontrado")
+	_find_player()
 
 	_style_health_bar()
 
+	_style_stamina_bar()
+
+
+# =========================================================
+# ACTUALIZAR HUD
+# =========================================================
 
 func _process(_delta: float) -> void:
-	if not is_instance_valid(player):
-		player = get_tree().get_first_node_in_group(
-			"player"
-		) as CharacterBody2D
 
+	if not is_instance_valid(player):
+		_find_player()
 		return
 
-	var current_health: int = player.health
-	var player_max_health: int = player.max_health
+
+	# -----------------------------------------------------
+	# VIDA
+	# -----------------------------------------------------
+
+	var current_health: int = int(
+		player.get("health")
+	)
+
+	var player_max_health: int = int(
+		player.get("max_health")
+	)
+
 
 	health_bar.max_value = player_max_health
+
 	health_bar.value = current_health
+
 
 	health_label.text = (
 		str(current_health)
@@ -42,9 +67,67 @@ func _process(_delta: float) -> void:
 	)
 
 
+	# -----------------------------------------------------
+	# STAMINA
+	# -----------------------------------------------------
+
+	var current_stamina: float = float(
+		player.get("stamina")
+	)
+
+	var player_max_stamina: float = float(
+		player.get("max_stamina")
+	)
+
+
+	stamina_bar.max_value = player_max_stamina
+
+	stamina_bar.value = current_stamina
+
+
+	stamina_label.text = (
+		str(int(round(current_stamina)))
+		+ " / "
+		+ str(int(round(player_max_stamina)))
+	)
+
+
+# =========================================================
+# BUSCAR PLAYER
+# =========================================================
+
+func _find_player() -> void:
+
+	player = get_tree().get_first_node_in_group(
+		"player"
+	) as CharacterBody2D
+
+
+	if player == null:
+
+		print(
+			"HUD: Player no encontrado"
+		)
+
+	else:
+
+		print(
+			"HUD: Player encontrado"
+		)
+
+
+# =========================================================
+# ESTILO VIDA
+# =========================================================
+
 func _style_health_bar() -> void:
-	# Fondo oscuro.
+
+	# -----------------------------------------------------
+	# FONDO
+	# -----------------------------------------------------
+
 	var background := StyleBoxFlat.new()
+
 
 	background.bg_color = Color(
 		0.08,
@@ -53,6 +136,7 @@ func _style_health_bar() -> void:
 		0.95
 	)
 
+
 	background.border_color = Color(
 		0.7,
 		0.7,
@@ -60,8 +144,16 @@ func _style_health_bar() -> void:
 		1.0
 	)
 
-	background.set_border_width_all(2)
-	background.set_corner_radius_all(5)
+
+	background.set_border_width_all(
+		2
+	)
+
+
+	background.set_corner_radius_all(
+		5
+	)
+
 
 	health_bar.add_theme_stylebox_override(
 		"background",
@@ -69,8 +161,12 @@ func _style_health_bar() -> void:
 	)
 
 
-	# Parte roja de HP.
+	# -----------------------------------------------------
+	# VIDA ROJA
+	# -----------------------------------------------------
+
 	var fill := StyleBoxFlat.new()
+
 
 	fill.bg_color = Color(
 		0.75,
@@ -79,7 +175,11 @@ func _style_health_bar() -> void:
 		1.0
 	)
 
-	fill.set_corner_radius_all(4)
+
+	fill.set_corner_radius_all(
+		4
+	)
+
 
 	health_bar.add_theme_stylebox_override(
 		"fill",
@@ -87,23 +187,128 @@ func _style_health_bar() -> void:
 	)
 
 
-	# Texto.
+	# -----------------------------------------------------
+	# TEXTO
+	# -----------------------------------------------------
+
 	health_label.add_theme_font_size_override(
 		"font_size",
 		17
 	)
+
 
 	health_label.add_theme_color_override(
 		"font_color",
 		Color.WHITE
 	)
 
+
 	health_label.add_theme_color_override(
 		"font_outline_color",
 		Color.BLACK
 	)
 
+
 	health_label.add_theme_constant_override(
 		"outline_size",
 		4
+	)
+
+
+# =========================================================
+# ESTILO STAMINA
+# =========================================================
+
+func _style_stamina_bar() -> void:
+
+	# -----------------------------------------------------
+	# FONDO
+	# -----------------------------------------------------
+
+	var background := StyleBoxFlat.new()
+
+
+	background.bg_color = Color(
+		0.08,
+		0.08,
+		0.08,
+		0.95
+	)
+
+
+	background.border_color = Color(
+		0.65,
+		0.65,
+		0.65,
+		1.0
+	)
+
+
+	background.set_border_width_all(
+		2
+	)
+
+
+	background.set_corner_radius_all(
+		4
+	)
+
+
+	stamina_bar.add_theme_stylebox_override(
+		"background",
+		background
+	)
+
+
+	# -----------------------------------------------------
+	# STAMINA DORADA
+	# -----------------------------------------------------
+
+	var fill := StyleBoxFlat.new()
+
+
+	fill.bg_color = Color(
+		0.85,
+		0.65,
+		0.08,
+		1.0
+	)
+
+
+	fill.set_corner_radius_all(
+		3
+	)
+
+
+	stamina_bar.add_theme_stylebox_override(
+		"fill",
+		fill
+	)
+
+
+	# -----------------------------------------------------
+	# TEXTO
+	# -----------------------------------------------------
+
+	stamina_label.add_theme_font_size_override(
+		"font_size",
+		14
+	)
+
+
+	stamina_label.add_theme_color_override(
+		"font_color",
+		Color.WHITE
+	)
+
+
+	stamina_label.add_theme_color_override(
+		"font_outline_color",
+		Color.BLACK
+	)
+
+
+	stamina_label.add_theme_constant_override(
+		"outline_size",
+		3
 	)

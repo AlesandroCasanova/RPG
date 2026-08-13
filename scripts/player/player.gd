@@ -7,17 +7,41 @@ extends CharacterBody2D
 
 @export var speed: float = 300.0
 
+@export var sprint_speed: float = 450.0
+
+@export var sprint_stamina_per_second: float = 20.0
+
+
+# =========================================================
+# STAMINA
+# =========================================================
+
+@export var max_stamina: float = 100.0
+
+@export var stamina_regen_rate: float = 25.0
+
+@export var stamina_regen_delay: float = 0.75
+
+var stamina: float = 100.0
+
+var stamina_regen_delay_left: float = 0.0
+
+var is_sprinting: bool = false
+
 
 # =========================================================
 # DASH
 # =========================================================
 
 @export var dash_speed: float = 850.0
+
 @export var dash_duration: float = 0.14
+
 @export var dash_cooldown: float = 0.40
 
-# Tiempo máximo entre dos pulsaciones.
 @export var dash_double_tap_window: float = 0.25
+
+@export var dash_stamina_cost: float = 25.0
 
 
 # =========================================================
@@ -27,31 +51,123 @@ extends CharacterBody2D
 @export var max_health: int = 100
 
 var health: int = 100
+
 var is_dead: bool = false
 
 
 # =========================================================
-# ATAQUE
+# ATAQUE NORMAL
 # =========================================================
 
 @export var attack_damage: int = 25
+
 @export var attack_distance: float = 55.0
+
 @export var attack_duration: float = 0.12
+
 @export var attack_cooldown: float = 0.35
+
+
+# =========================================================
+# ATAQUE PESADO
+# =========================================================
+
+@export var heavy_attack_damage: int = 45
+
+@export var heavy_attack_distance: float = 65.0
+
+@export var heavy_attack_stamina_cost: float = 25.0
+
+@export var heavy_attack_windup: float = 0.22
+
+@export var heavy_attack_hit_duration: float = 0.18
+
+@export var heavy_attack_total_duration: float = 0.70
+
+
+# =========================================================
+# ATAQUE CARGADO
+# =========================================================
+
+@export var charged_attack_required_hold: float = 1.0
+
+@export var charged_attack_damage: int = 80
+
+# Lo dejamos en 55 porque la hitbox ya es ancha.
+@export var charged_attack_distance: float = 55.0
+
+@export var charged_attack_stamina_cost: float = 60.0
+
+@export var charged_attack_windup: float = 0.18
+
+@export var charged_attack_hit_duration: float = 0.22
+
+@export var charged_attack_total_duration: float = 0.95
+
+# Cantidad máxima de enemigos alcanzados por el barrido.
+@export var charged_attack_max_targets: int = 8
+
+
+# =========================================================
+# CARGA
+# =========================================================
+
+# Mientras carga, se mueve más despacio.
+@export var charge_move_multiplier: float = 0.55
+
+
+# =========================================================
+# DEBUG
+# =========================================================
 
 @export var show_attack_debug: bool = true
 
 
 # =========================================================
-# NODOS
+# NODOS DEL PLAYER
 # =========================================================
 
-@onready var player_animated: AnimatedSprite2D = $PlayerAnimated
+@onready var player_animated: AnimatedSprite2D = (
+	$PlayerAnimated
+)
 
-@onready var attack_area: Area2D = $AttackArea
 
-@onready var attack_collision: CollisionShape2D = (
-	$AttackArea/CollisionShape2D
+# =========================================================
+# HITBOX NORMAL
+# =========================================================
+
+@onready var normal_attack_area: Area2D = (
+	$NormalAttackArea
+)
+
+@onready var normal_attack_collision: CollisionShape2D = (
+	$NormalAttackArea/CollisionShape2D
+)
+
+
+# =========================================================
+# HITBOX PESADA
+# =========================================================
+
+@onready var heavy_attack_area: Area2D = (
+	$HeavyAttackArea
+)
+
+@onready var heavy_attack_collision: CollisionShape2D = (
+	$HeavyAttackArea/CollisionShape2D
+)
+
+
+# =========================================================
+# HITBOX CARGADA
+# =========================================================
+
+@onready var charged_attack_area: Area2D = (
+	$ChargedAttackArea
+)
+
+@onready var charged_attack_collision: CollisionShape2D = (
+	$ChargedAttackArea/CollisionShape2D
 )
 
 
@@ -59,27 +175,70 @@ var is_dead: bool = false
 # APUNTADO
 # =========================================================
 
-# Dirección exacta desde Player hacia mouse.
 var aim_direction: Vector2 = Vector2.DOWN
 
-# Orientación visual de las 8 disponibles.
 var last_facing: String = "s"
+
+var locked_attack_direction: Vector2 = Vector2.DOWN
 
 
 # =========================================================
 # ESTADO DE ATAQUE
 # =========================================================
 
-var attack_time_left: float = 0.0
-var attack_cooldown_left: float = 0.0
+var attack_action_time_left: float = 0.0
 
-var hit_targets: Array[Node] = []
+var attack_hit_delay_left: float = 0.0
 
-var attack_debug: Polygon2D
+var attack_hit_time_left: float = 0.0
+
+var attack_hitbox_active: bool = false
+
+var attack_has_resolved: bool = false
+
+var current_attack_name: String = ""
+
+var current_attack_damage: int = 0
+
+var current_attack_distance: float = 0.0
+
+var current_attack_hit_duration: float = 0.0
+
+var current_attack_max_targets: int = 1
+
+var current_attack_area: Area2D = null
+
+var current_attack_collision: CollisionShape2D = null
+
+var current_attack_debug: Polygon2D = null
+
+var hit_targets: Array[Node2D] = []
 
 
 # =========================================================
-# ESTADO DE DASH
+# DEBUG DE HITBOXES
+# =========================================================
+
+var normal_attack_debug: Polygon2D = null
+
+var heavy_attack_debug: Polygon2D = null
+
+var charged_attack_debug: Polygon2D = null
+
+
+# =========================================================
+# ATAQUE PESADO / CARGADO
+# =========================================================
+
+var is_charging_heavy: bool = false
+
+var heavy_hold_time: float = 0.0
+
+var charged_attack_ready: bool = false
+
+
+# =========================================================
+# DASH
 # =========================================================
 
 var is_dashing: bool = false
@@ -87,6 +246,7 @@ var is_dashing: bool = false
 var dash_direction: Vector2 = Vector2.ZERO
 
 var dash_time_left: float = 0.0
+
 var dash_cooldown_left: float = 0.0
 
 
@@ -105,13 +265,12 @@ var double_tap_time_left: float = 0.0
 
 func _ready() -> void:
 
-	# -----------------------------------------------------
-	# VIDA
-	# -----------------------------------------------------
-
 	health = max_health
 
+	stamina = max_stamina
+
 	add_to_group("player")
+
 
 	print(
 		"PLAYER CREADO | HP: ",
@@ -121,49 +280,70 @@ func _ready() -> void:
 	)
 
 
+	print(
+		"STAMINA: ",
+		stamina,
+		" / ",
+		max_stamina
+	)
+
+
 	# -----------------------------------------------------
-	# COLISIONES
+	# PLAYER
 	# -----------------------------------------------------
 
 	collision_layer = 1
 
 
 	# -----------------------------------------------------
-	# ATTACK AREA
+	# CONFIGURAR HITBOXES
 	# -----------------------------------------------------
 
-	attack_area.collision_layer = 0
-	attack_area.collision_mask = 2
+	_configure_attack_area(
+		normal_attack_area,
+		normal_attack_collision
+	)
 
-	attack_area.monitoring = true
-	attack_area.monitorable = true
 
-	attack_collision.disabled = true
+	_configure_attack_area(
+		heavy_attack_area,
+		heavy_attack_collision
+	)
+
+
+	_configure_attack_area(
+		charged_attack_area,
+		charged_attack_collision
+	)
 
 
 	# -----------------------------------------------------
-	# SIGNAL
+	# CREAR DEBUG
 	# -----------------------------------------------------
 
-	if not attack_area.body_entered.is_connected(
-		_on_attack_area_body_entered
-	):
-
-		attack_area.body_entered.connect(
-			_on_attack_area_body_entered
+	normal_attack_debug = (
+		_create_attack_debug(
+			normal_attack_area,
+			normal_attack_collision
 		)
+	)
 
 
-	# -----------------------------------------------------
-	# DEBUG
-	# -----------------------------------------------------
+	heavy_attack_debug = (
+		_create_attack_debug(
+			heavy_attack_area,
+			heavy_attack_collision
+		)
+	)
 
-	_create_attack_debug()
 
+	charged_attack_debug = (
+		_create_attack_debug(
+			charged_attack_area,
+			charged_attack_collision
+		)
+	)
 
-	# -----------------------------------------------------
-	# APUNTADO INICIAL
-	# -----------------------------------------------------
 
 	_update_aim_from_mouse()
 
@@ -171,14 +351,32 @@ func _ready() -> void:
 
 
 # =========================================================
+# CONFIGURAR AREA DE ATAQUE
+# =========================================================
+
+func _configure_attack_area(
+	area: Area2D,
+	collision: CollisionShape2D
+) -> void:
+
+	area.collision_layer = 0
+
+	area.collision_mask = 2
+
+	# El daño se resolverá mediante consultas físicas.
+	# No necesitamos body_entered.
+	area.monitoring = false
+
+	area.monitorable = false
+
+	collision.disabled = true
+
+
+# =========================================================
 # PHYSICS
 # =========================================================
 
 func _physics_process(delta: float) -> void:
-
-	# -----------------------------------------------------
-	# MUERTO
-	# -----------------------------------------------------
 
 	if is_dead:
 
@@ -191,24 +389,37 @@ func _physics_process(delta: float) -> void:
 	# TIMERS
 	# -----------------------------------------------------
 
-	_update_attack_timers(delta)
+	_update_attack_state(delta)
 
 	_update_dash_timers(delta)
 
+	_update_stamina_regen(delta)
+
 
 	# -----------------------------------------------------
-	# APUNTADO CON MOUSE
+	# APUNTADO
 	# -----------------------------------------------------
 
-	# Mientras la hitbox de un ataque está activa,
-	# mantenemos brevemente bloqueada esa orientación.
-	if attack_time_left <= 0.0:
+	# Durante la carga se puede seguir apuntando.
+	#
+	# Cuando el golpe ya comenzó,
+	# se bloquea su dirección.
+	if attack_action_time_left <= 0.0:
 
 		_update_aim_from_mouse()
 
 
 	# -----------------------------------------------------
-	# DETECTAR DASH
+	# CLICK DERECHO
+	# -----------------------------------------------------
+
+	_update_heavy_attack_input(
+		delta
+	)
+
+
+	# -----------------------------------------------------
+	# DASH
 	# -----------------------------------------------------
 
 	_handle_dash_input()
@@ -220,14 +431,16 @@ func _physics_process(delta: float) -> void:
 
 	if is_dashing:
 
-		# Podemos seguir mirando con el mouse mientras
-		# nos desplazamos en otra dirección.
-		_play_walk()
+		is_sprinting = false
+
 
 		velocity = (
 			dash_direction
 			* dash_speed
 		)
+
+
+		_play_walk()
 
 		move_and_slide()
 
@@ -235,13 +448,14 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# INPUT DE MOVIMIENTO
+	# WASD
 	# -----------------------------------------------------
 
 	var input_x: float = Input.get_axis(
 		"move_left",
 		"move_right"
 	)
+
 
 	var input_y: float = Input.get_axis(
 		"move_up",
@@ -260,7 +474,8 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	var iso_direction: Vector2 = Vector2(
-		movement_input.x - movement_input.y,
+		movement_input.x
+		- movement_input.y,
 
 		(
 			movement_input.x
@@ -276,21 +491,66 @@ func _physics_process(delta: float) -> void:
 		)
 
 
+	# -----------------------------------------------------
+	# VELOCIDAD
+	# -----------------------------------------------------
+
+	is_sprinting = false
+
+
+	var current_move_speed: float = speed
+
+
+	# -----------------------------------------------------
+	# SPRINT
+	# -----------------------------------------------------
+
+	var can_sprint: bool = (
+		movement_input != Vector2.ZERO
+		and
+		Input.is_action_pressed("sprint")
+		and
+		stamina > 0.0
+		and
+		not is_charging_heavy
+		and
+		attack_action_time_left <= 0.0
+	)
+
+
+	if can_sprint:
+
+		is_sprinting = true
+
+		current_move_speed = sprint_speed
+
+
+		_drain_stamina(
+			sprint_stamina_per_second
+			* delta
+		)
+
+
+	# -----------------------------------------------------
+	# MOVIMIENTO DURANTE CARGA
+	# -----------------------------------------------------
+
+	if is_charging_heavy:
+
+		current_move_speed *= (
+			charge_move_multiplier
+		)
+
+
 	velocity = (
 		iso_direction
-		* speed
+		* current_move_speed
 	)
 
 
 	# -----------------------------------------------------
 	# ANIMACIÓN
 	# -----------------------------------------------------
-
-	# IMPORTANTE:
-	#
-	# WASD ya NO cambia last_facing.
-	#
-	# last_facing depende exclusivamente del mouse.
 
 	if movement_input != Vector2.ZERO:
 
@@ -302,174 +562,965 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# ATAQUE
+	# ATAQUE NORMAL
 	# -----------------------------------------------------
 
 	if Input.is_action_just_pressed(
 		"attack"
 	):
 
-		_try_attack()
+		_try_normal_attack()
 
-
-	# -----------------------------------------------------
-	# MOVIMIENTO
-	# -----------------------------------------------------
 
 	move_and_slide()
 
 
 # =========================================================
-# APUNTADO CON MOUSE
+# STAMINA
 # =========================================================
 
-func _update_aim_from_mouse() -> void:
+func _update_stamina_regen(
+	delta: float
+) -> void:
 
-	var mouse_position: Vector2 = (
-		get_global_mouse_position()
-	)
+	if stamina_regen_delay_left > 0.0:
 
-
-	var direction_to_mouse: Vector2 = (
-		mouse_position
-		- global_position
-	)
-
-
-	# Evitamos problemas si el cursor está
-	# exactamente encima del Player.
-	if direction_to_mouse.length_squared() < 4.0:
+		stamina_regen_delay_left = maxf(
+			stamina_regen_delay_left - delta,
+			0.0
+		)
 
 		return
 
 
-	aim_direction = (
-		direction_to_mouse.normalized()
-	)
+	if stamina >= max_stamina:
+
+		stamina = max_stamina
+
+		return
 
 
-	_update_facing_from_aim(
-		aim_direction
+	if is_charging_heavy:
+
+		return
+
+
+	stamina = minf(
+		max_stamina,
+		stamina
+		+ stamina_regen_rate * delta
 	)
 
 
 # =========================================================
-# CONVERTIR MOUSE A 8 DIRECCIONES
+# GASTAR STAMINA
 # =========================================================
 
-func _update_facing_from_aim(
-	direction: Vector2
+func _spend_stamina(
+	amount: float
+) -> bool:
+
+	if amount <= 0.0:
+
+		return true
+
+
+	if stamina < amount:
+
+		return false
+
+
+	stamina = maxf(
+		stamina - amount,
+		0.0
+	)
+
+
+	stamina_regen_delay_left = (
+		stamina_regen_delay
+	)
+
+
+	return true
+
+
+# =========================================================
+# DRENAR STAMINA
+# =========================================================
+
+func _drain_stamina(
+	amount: float
 ) -> void:
 
-	var angle_degrees: float = (
-		rad_to_deg(
-			direction.angle()
+	if amount <= 0.0:
+
+		return
+
+
+	stamina = maxf(
+		stamina - amount,
+		0.0
+	)
+
+
+	stamina_regen_delay_left = (
+		stamina_regen_delay
+	)
+
+
+# =========================================================
+# INPUT PESADO / CARGADO
+# =========================================================
+
+func _update_heavy_attack_input(
+	delta: float
+) -> void:
+
+	# -----------------------------------------------------
+	# PRESIONAR DERECHO
+	# -----------------------------------------------------
+
+	if Input.is_action_just_pressed(
+		"heavy_attack"
+	):
+
+		_begin_heavy_charge()
+
+
+	# -----------------------------------------------------
+	# MANTENER DERECHO
+	# -----------------------------------------------------
+
+	if is_charging_heavy:
+
+		stamina_regen_delay_left = (
+			stamina_regen_delay
+		)
+
+
+		if Input.is_action_pressed(
+			"heavy_attack"
+		):
+
+			heavy_hold_time += delta
+
+
+			if (
+				not charged_attack_ready
+				and
+				heavy_hold_time
+				>= charged_attack_required_hold
+			):
+
+				charged_attack_ready = true
+
+
+				player_animated.self_modulate = Color(
+					1.0,
+					0.55,
+					0.15,
+					1.0
+				)
+
+
+				print(
+					"ATAQUE CARGADO LISTO"
+				)
+
+
+	# -----------------------------------------------------
+	# SOLTAR DERECHO
+	# -----------------------------------------------------
+
+	if Input.is_action_just_released(
+		"heavy_attack"
+	):
+
+		if is_charging_heavy:
+
+			_release_heavy_attack()
+
+
+# =========================================================
+# COMENZAR CARGA
+# =========================================================
+
+func _begin_heavy_charge() -> void:
+
+	if is_dead:
+
+		return
+
+
+	if is_dashing:
+
+		return
+
+
+	if attack_action_time_left > 0.0:
+
+		return
+
+
+	if stamina < heavy_attack_stamina_cost:
+
+		print(
+			"SIN STAMINA PARA ATAQUE PESADO"
+		)
+
+		return
+
+
+	is_charging_heavy = true
+
+	heavy_hold_time = 0.0
+
+	charged_attack_ready = false
+
+
+	player_animated.self_modulate = Color(
+		1.0,
+		0.85,
+		0.55,
+		1.0
+	)
+
+
+# =========================================================
+# SOLTAR CLICK DERECHO
+# =========================================================
+
+func _release_heavy_attack() -> void:
+
+	var was_charged: bool = (
+		charged_attack_ready
+	)
+
+
+	_clear_heavy_charge()
+
+
+	# =====================================================
+	# CARGADO
+	# =====================================================
+
+	if was_charged:
+
+		if _spend_stamina(
+			charged_attack_stamina_cost
+		):
+
+			_start_attack(
+				"cargado",
+				charged_attack_damage,
+				charged_attack_distance,
+				charged_attack_windup,
+				charged_attack_hit_duration,
+				charged_attack_total_duration,
+				charged_attack_area,
+				charged_attack_collision,
+				charged_attack_debug,
+				charged_attack_max_targets
+			)
+
+
+			print(
+				"ATAQUE CARGADO | Daño: ",
+				charged_attack_damage,
+				" | Stamina: ",
+				stamina
+			)
+
+
+			return
+
+
+		print(
+			"STAMINA INSUFICIENTE PARA CARGADO"
+		)
+
+
+	# =====================================================
+	# PESADO
+	# =====================================================
+
+	if _spend_stamina(
+		heavy_attack_stamina_cost
+	):
+
+		_start_attack(
+			"pesado",
+			heavy_attack_damage,
+			heavy_attack_distance,
+			heavy_attack_windup,
+			heavy_attack_hit_duration,
+			heavy_attack_total_duration,
+			heavy_attack_area,
+			heavy_attack_collision,
+			heavy_attack_debug,
+			1
+		)
+
+
+		print(
+			"ATAQUE PESADO | Daño: ",
+			heavy_attack_damage,
+			" | Stamina: ",
+			stamina
+		)
+
+
+	else:
+
+		print(
+			"SIN STAMINA PARA ATAQUE PESADO"
+		)
+
+
+# =========================================================
+# CANCELAR CARGA
+# =========================================================
+
+func _cancel_heavy_charge() -> void:
+
+	if not is_charging_heavy:
+
+		return
+
+
+	print(
+		"CARGA CANCELADA"
+	)
+
+
+	_clear_heavy_charge()
+
+
+# =========================================================
+# LIMPIAR CARGA
+# =========================================================
+
+func _clear_heavy_charge() -> void:
+
+	is_charging_heavy = false
+
+	heavy_hold_time = 0.0
+
+	charged_attack_ready = false
+
+
+	player_animated.self_modulate = (
+		Color.WHITE
+	)
+
+
+# =========================================================
+# ATAQUE NORMAL
+# =========================================================
+
+func _try_normal_attack() -> void:
+
+	if is_dead:
+
+		return
+
+
+	if is_dashing:
+
+		return
+
+
+	if is_charging_heavy:
+
+		return
+
+
+	if attack_action_time_left > 0.0:
+
+		return
+
+
+	_start_attack(
+		"normal",
+		attack_damage,
+		attack_distance,
+		0.0,
+		attack_duration,
+		attack_cooldown,
+		normal_attack_area,
+		normal_attack_collision,
+		normal_attack_debug,
+		1
+	)
+
+
+	print(
+		"ATAQUE NORMAL | Daño: ",
+		attack_damage
+	)
+
+
+# =========================================================
+# COMENZAR ATAQUE
+# =========================================================
+
+func _start_attack(
+	attack_name: String,
+	damage: int,
+	distance: float,
+	hit_delay: float,
+	hit_duration: float,
+	total_duration: float,
+	area: Area2D,
+	collision: CollisionShape2D,
+	debug_polygon: Polygon2D,
+	max_targets: int
+) -> void:
+
+	current_attack_name = attack_name
+
+	current_attack_damage = damage
+
+	current_attack_distance = distance
+
+	current_attack_hit_duration = hit_duration
+
+	current_attack_max_targets = max_targets
+
+	current_attack_area = area
+
+	current_attack_collision = collision
+
+	current_attack_debug = debug_polygon
+
+
+	# -----------------------------------------------------
+	# BLOQUEAR DIRECCIÓN
+	# -----------------------------------------------------
+
+	_update_aim_from_mouse()
+
+
+	locked_attack_direction = (
+		_get_facing_direction()
+	)
+
+
+	# -----------------------------------------------------
+	# POSICIONAR HITBOX
+	# -----------------------------------------------------
+
+	_update_current_attack_area()
+
+
+	# -----------------------------------------------------
+	# ESTADO
+	# -----------------------------------------------------
+
+	attack_action_time_left = (
+		total_duration
+	)
+
+
+	attack_hit_delay_left = (
+		hit_delay
+	)
+
+
+	attack_hit_time_left = 0.0
+
+	attack_hitbox_active = false
+
+	attack_has_resolved = false
+
+
+	hit_targets.clear()
+
+
+	# -----------------------------------------------------
+	# SIN WINDUP
+	# -----------------------------------------------------
+
+	if hit_delay <= 0.0:
+
+		_activate_attack_hitbox()
+
+
+# =========================================================
+# ACTUALIZAR ATAQUE
+# =========================================================
+
+func _update_attack_state(
+	delta: float
+) -> void:
+
+	if attack_action_time_left <= 0.0:
+
+		return
+
+
+	# -----------------------------------------------------
+	# DURACIÓN TOTAL
+	# -----------------------------------------------------
+
+	attack_action_time_left = maxf(
+		attack_action_time_left - delta,
+		0.0
+	)
+
+
+	# -----------------------------------------------------
+	# WINDUP
+	# -----------------------------------------------------
+
+	if (
+		attack_hit_delay_left > 0.0
+		and
+		not attack_hitbox_active
+	):
+
+		attack_hit_delay_left = maxf(
+			attack_hit_delay_left - delta,
+			0.0
+		)
+
+
+		if attack_hit_delay_left <= 0.0:
+
+			_activate_attack_hitbox()
+
+
+	# -----------------------------------------------------
+	# HITBOX
+	# -----------------------------------------------------
+
+	if attack_hitbox_active:
+
+		attack_hit_time_left = maxf(
+			attack_hit_time_left - delta,
+			0.0
+		)
+
+
+		if attack_hit_time_left <= 0.0:
+
+			_disable_attack_hitbox()
+
+
+	# -----------------------------------------------------
+	# FIN TOTAL
+	# -----------------------------------------------------
+
+	if attack_action_time_left <= 0.0:
+
+		_finish_attack()
+
+
+# =========================================================
+# ACTIVAR HITBOX
+# =========================================================
+
+func _activate_attack_hitbox() -> void:
+
+	if attack_hitbox_active:
+
+		return
+
+
+	attack_hitbox_active = true
+
+
+	attack_hit_time_left = (
+		current_attack_hit_duration
+	)
+
+
+	if (
+		show_attack_debug
+		and
+		current_attack_debug != null
+	):
+
+		current_attack_debug.visible = true
+
+
+	# El impacto ocurre en este momento exacto.
+	_resolve_attack_hits()
+
+
+# =========================================================
+# DESACTIVAR HITBOX
+# =========================================================
+
+func _disable_attack_hitbox() -> void:
+
+	attack_hitbox_active = false
+
+	attack_hit_time_left = 0.0
+
+
+	if current_attack_debug != null:
+
+		current_attack_debug.visible = false
+
+
+# =========================================================
+# TERMINAR ATAQUE
+# =========================================================
+
+func _finish_attack() -> void:
+
+	_disable_attack_hitbox()
+
+
+	attack_action_time_left = 0.0
+
+	attack_hit_delay_left = 0.0
+
+
+	current_attack_name = ""
+
+	current_attack_damage = 0
+
+	current_attack_distance = 0.0
+
+	current_attack_hit_duration = 0.0
+
+	current_attack_max_targets = 1
+
+
+	current_attack_area = null
+
+	current_attack_collision = null
+
+	current_attack_debug = null
+
+
+	attack_has_resolved = false
+
+
+# =========================================================
+# POSICIONAR HITBOX ACTUAL
+# =========================================================
+
+func _update_current_attack_area() -> void:
+
+	if current_attack_area == null:
+
+		return
+
+
+	current_attack_area.position = (
+		locked_attack_direction
+		* current_attack_distance
+	)
+
+
+	current_attack_area.rotation = (
+		locked_attack_direction.angle()
+	)
+
+
+# =========================================================
+# RESOLVER IMPACTOS
+# =========================================================
+
+func _resolve_attack_hits() -> void:
+
+	if attack_has_resolved:
+
+		return
+
+
+	if current_attack_collision == null:
+
+		return
+
+
+	attack_has_resolved = true
+
+
+	# -----------------------------------------------------
+	# CANDIDATOS DENTRO DE LA HITBOX
+	# -----------------------------------------------------
+
+	var candidates: Array[Node2D] = (
+		_get_attack_candidates()
+	)
+
+
+	if candidates.is_empty():
+
+		return
+
+
+	# El más cercano se procesa primero.
+	candidates.sort_custom(
+		_sort_targets_by_distance
+	)
+
+
+	var targets_hit: int = 0
+
+
+	for target: Node2D in candidates:
+
+		if targets_hit >= current_attack_max_targets:
+
+			break
+
+
+		if not is_instance_valid(
+			target
+		):
+
+			continue
+
+
+		if target in hit_targets:
+
+			continue
+
+
+		# -------------------------------------------------
+		# ¿HAY ALGUIEN / ALGO TAPÁNDOLO?
+		# -------------------------------------------------
+
+		if not _has_clear_attack_line(
+			target
+		):
+
+			continue
+
+
+		# -------------------------------------------------
+		# GOLPE
+		# -------------------------------------------------
+
+		hit_targets.append(
+			target
+		)
+
+
+		target.take_damage(
+			current_attack_damage,
+			global_position
+		)
+
+
+		targets_hit += 1
+
+
+		print(
+			"GOLPE CONFIRMADO | ",
+			current_attack_name,
+			" | ",
+			target.name,
+			" | Daño: ",
+			current_attack_damage
+		)
+
+
+# =========================================================
+# OBTENER OBJETIVOS DENTRO DE LA HITBOX
+# =========================================================
+
+func _get_attack_candidates() -> Array[Node2D]:
+
+	var candidates: Array[Node2D] = []
+
+
+	if current_attack_collision == null:
+
+		return candidates
+
+
+	if current_attack_collision.shape == null:
+
+		return candidates
+
+
+	var query := (
+		PhysicsShapeQueryParameters2D.new()
+	)
+
+
+	query.shape = (
+		current_attack_collision.shape
+	)
+
+
+	query.transform = (
+		current_attack_collision.global_transform
+	)
+
+
+	# Enemigos = Layer 2.
+	query.collision_mask = 2
+
+
+	query.collide_with_bodies = true
+
+	query.collide_with_areas = false
+
+
+	var excluded: Array[RID] = [
+		get_rid()
+	]
+
+
+	query.exclude = excluded
+
+
+	var space_state := (
+		get_world_2d().direct_space_state
+	)
+
+
+	var results: Array[Dictionary] = (
+		space_state.intersect_shape(
+			query,
+			32
 		)
 	)
 
 
-	# -----------------------------------------------------
-	# ESTE
-	# -----------------------------------------------------
+	for result: Dictionary in results:
 
-	if (
-		angle_degrees >= -22.5
-		and
-		angle_degrees < 22.5
-	):
-
-		last_facing = "e"
+		var collider_value: Variant = (
+			result.get(
+				"collider"
+			)
+		)
 
 
-	# -----------------------------------------------------
-	# SURESTE
-	# -----------------------------------------------------
+		if not collider_value is Node2D:
 
-	elif (
-		angle_degrees >= 22.5
-		and
-		angle_degrees < 67.5
-	):
-
-		last_facing = "se"
+			continue
 
 
-	# -----------------------------------------------------
-	# SUR
-	# -----------------------------------------------------
-
-	elif (
-		angle_degrees >= 67.5
-		and
-		angle_degrees < 112.5
-	):
-
-		last_facing = "s"
+		var body: Node2D = (
+			collider_value as Node2D
+		)
 
 
-	# -----------------------------------------------------
-	# SUROESTE
-	# -----------------------------------------------------
+		if not body.has_method(
+			"take_damage"
+		):
 
-	elif (
-		angle_degrees >= 112.5
-		and
-		angle_degrees < 157.5
-	):
-
-		last_facing = "sw"
+			continue
 
 
-	# -----------------------------------------------------
-	# OESTE
-	# -----------------------------------------------------
+		if candidates.has(
+			body
+		):
 
-	elif (
-		angle_degrees >= 157.5
-		or
-		angle_degrees < -157.5
-	):
-
-		last_facing = "w"
+			continue
 
 
-	# -----------------------------------------------------
-	# NOROESTE
-	# -----------------------------------------------------
-
-	elif (
-		angle_degrees >= -157.5
-		and
-		angle_degrees < -112.5
-	):
-
-		last_facing = "nw"
+		candidates.append(
+			body
+		)
 
 
-	# -----------------------------------------------------
-	# NORTE
-	# -----------------------------------------------------
-
-	elif (
-		angle_degrees >= -112.5
-		and
-		angle_degrees < -67.5
-	):
-
-		last_facing = "n"
-
-
-	# -----------------------------------------------------
-	# NORESTE
-	# -----------------------------------------------------
-
-	else:
-
-		last_facing = "ne"
+	return candidates
 
 
 # =========================================================
-# DASH - INPUT
+# ORDENAR OBJETIVOS POR DISTANCIA
+# =========================================================
+
+func _sort_targets_by_distance(
+	a: Node2D,
+	b: Node2D
+) -> bool:
+
+	var distance_a: float = (
+		global_position.distance_squared_to(
+			a.global_position
+		)
+	)
+
+
+	var distance_b: float = (
+		global_position.distance_squared_to(
+			b.global_position
+		)
+	)
+
+
+	return distance_a < distance_b
+
+
+# =========================================================
+# COMPROBAR BLOQUEO
+# =========================================================
+
+func _has_clear_attack_line(
+	target: Node2D
+) -> bool:
+
+	var ray_query := (
+		PhysicsRayQueryParameters2D.create(
+			global_position,
+			target.global_position
+		)
+	)
+
+
+	# Layer 1:
+	# Player / árboles / paredes.
+	#
+	# Layer 2:
+	# Enemigos.
+	ray_query.collision_mask = 3
+
+
+	ray_query.collide_with_bodies = true
+
+	ray_query.collide_with_areas = false
+
+
+	var excluded: Array[RID] = [
+		get_rid()
+	]
+
+
+	ray_query.exclude = excluded
+
+
+	var space_state := (
+		get_world_2d().direct_space_state
+	)
+
+
+	var result: Dictionary = (
+		space_state.intersect_ray(
+			ray_query
+		)
+	)
+
+
+	# Si no encontró nada, dejamos pasar.
+	if result.is_empty():
+
+		return true
+
+
+	var collider_value: Variant = (
+		result.get(
+			"collider"
+		)
+	)
+
+
+	# El primer objeto encontrado tiene que ser
+	# exactamente el enemigo al que queremos golpear.
+	return collider_value == target
+
+
+# =========================================================
+# DASH INPUT
 # =========================================================
 
 func _handle_dash_input() -> void:
@@ -515,17 +1566,13 @@ func _handle_dash_input() -> void:
 
 
 # =========================================================
-# DASH - REGISTRAR TOQUE
+# REGISTRAR DOBLE TOQUE
 # =========================================================
 
 func _register_direction_tap(
 	action_name: String,
 	input_direction: Vector2
 ) -> void:
-
-	# -----------------------------------------------------
-	# SEGUNDO TOQUE
-	# -----------------------------------------------------
 
 	if (
 		last_tap_action == action_name
@@ -553,11 +1600,8 @@ func _register_direction_tap(
 		return
 
 
-	# -----------------------------------------------------
-	# PRIMER TOQUE
-	# -----------------------------------------------------
-
 	last_tap_action = action_name
+
 
 	double_tap_time_left = (
 		dash_double_tap_window
@@ -565,7 +1609,7 @@ func _register_direction_tap(
 
 
 # =========================================================
-# DASH - COMENZAR
+# DASH
 # =========================================================
 
 func _start_dash(
@@ -573,10 +1617,34 @@ func _start_dash(
 	action_name: String
 ) -> void:
 
-	# IMPORTANTE:
-	#
-	# El dash depende de WASD.
-	# NO depende del mouse.
+	if attack_action_time_left > 0.0:
+
+		return
+
+
+	# Primero comprobamos stamina.
+	# Si no alcanza, no cancelamos la carga.
+	if stamina < dash_stamina_cost:
+
+		print(
+			"SIN STAMINA PARA DASH"
+		)
+
+		return
+
+
+	# Dash cancela una carga.
+	if is_charging_heavy:
+
+		_cancel_heavy_charge()
+
+
+	if not _spend_stamina(
+		dash_stamina_cost
+	):
+
+		return
+
 
 	var iso_dash_direction: Vector2 = Vector2(
 		input_direction.x
@@ -601,78 +1669,65 @@ func _start_dash(
 
 	is_dashing = true
 
+
 	dash_direction = (
 		iso_dash_direction
 	)
 
+
 	dash_time_left = (
 		dash_duration
 	)
+
 
 	dash_cooldown_left = (
 		dash_cooldown
 	)
 
 
-	# NO modificamos last_facing.
-	# El personaje sigue mirando al mouse.
-
-	_play_walk()
-
-
 	print(
 		"DASH: ",
 		action_name,
-		" | Mirando: ",
-		last_facing
+		" | STAMINA: ",
+		stamina
 	)
 
 
 # =========================================================
-# DASH - TIMERS
+# TIMERS DASH
 # =========================================================
 
 func _update_dash_timers(
 	delta: float
 ) -> void:
 
-	# -----------------------------------------------------
-	# COOLDOWN
-	# -----------------------------------------------------
-
 	if dash_cooldown_left > 0.0:
 
-		dash_cooldown_left -= delta
+		dash_cooldown_left = maxf(
+			dash_cooldown_left - delta,
+			0.0
+		)
 
-
-		if dash_cooldown_left < 0.0:
-
-			dash_cooldown_left = 0.0
-
-
-	# -----------------------------------------------------
-	# DOBLE TOQUE
-	# -----------------------------------------------------
 
 	if double_tap_time_left > 0.0:
 
-		double_tap_time_left -= delta
+		double_tap_time_left = maxf(
+			double_tap_time_left - delta,
+			0.0
+		)
 
 
 		if double_tap_time_left <= 0.0:
 
-			double_tap_time_left = 0.0
-
 			last_tap_action = ""
 
 
-	# -----------------------------------------------------
-	# DURACIÓN DASH
-	# -----------------------------------------------------
-
 	if is_dashing:
 
-		dash_time_left -= delta
+		dash_time_left = maxf(
+			dash_time_left - delta,
+			0.0
+		)
 
 
 		if dash_time_left <= 0.0:
@@ -681,7 +1736,7 @@ func _update_dash_timers(
 
 
 # =========================================================
-# DASH - FINALIZAR
+# TERMINAR DASH
 # =========================================================
 
 func _finish_dash() -> void:
@@ -695,194 +1750,123 @@ func _finish_dash() -> void:
 	velocity = Vector2.ZERO
 
 
-	# La animación correcta se decide en el
-	# siguiente physics frame.
-
-
 # =========================================================
-# ANIMACIÓN IDLE
+# APUNTADO CON MOUSE
 # =========================================================
 
-func _play_idle() -> void:
+func _update_aim_from_mouse() -> void:
 
-	var animation_name: String = (
-		"idle_" + last_facing
+	var mouse_position: Vector2 = (
+		get_global_mouse_position()
 	)
 
 
-	if player_animated.sprite_frames.has_animation(
-		animation_name
-	):
-
-		if player_animated.animation != animation_name:
-
-			player_animated.play(
-				animation_name
-			)
-
-
-# =========================================================
-# ANIMACIÓN WALK
-# =========================================================
-
-func _play_walk() -> void:
-
-	var animation_name: String = (
-		"walk_" + last_facing
+	var direction_to_mouse: Vector2 = (
+		mouse_position
+		- global_position
 	)
 
 
-	if player_animated.sprite_frames.has_animation(
-		animation_name
+	if direction_to_mouse.length_squared() < 4.0:
+
+		return
+
+
+	aim_direction = (
+		direction_to_mouse.normalized()
+	)
+
+
+	_update_facing_from_aim(
+		aim_direction
+	)
+
+
+# =========================================================
+# MOUSE → 8 DIRECCIONES
+# =========================================================
+
+func _update_facing_from_aim(
+	direction: Vector2
+) -> void:
+
+	var angle_degrees: float = (
+		rad_to_deg(
+			direction.angle()
+		)
+	)
+
+
+	if (
+		angle_degrees >= -22.5
+		and
+		angle_degrees < 22.5
 	):
 
-		if player_animated.animation != animation_name:
+		last_facing = "e"
 
-			player_animated.play(
-				animation_name
-			)
+
+	elif (
+		angle_degrees >= 22.5
+		and
+		angle_degrees < 67.5
+	):
+
+		last_facing = "se"
+
+
+	elif (
+		angle_degrees >= 67.5
+		and
+		angle_degrees < 112.5
+	):
+
+		last_facing = "s"
+
+
+	elif (
+		angle_degrees >= 112.5
+		and
+		angle_degrees < 157.5
+	):
+
+		last_facing = "sw"
+
+
+	elif (
+		angle_degrees >= 157.5
+		or
+		angle_degrees < -157.5
+	):
+
+		last_facing = "w"
+
+
+	elif (
+		angle_degrees >= -157.5
+		and
+		angle_degrees < -112.5
+	):
+
+		last_facing = "nw"
+
+
+	elif (
+		angle_degrees >= -112.5
+		and
+		angle_degrees < -67.5
+	):
+
+		last_facing = "n"
 
 
 	else:
 
-		# Placeholder mientras no tengamos
-		# walk definitivo.
-
-		var idle_name: String = (
-			"idle_" + last_facing
-		)
-
-
-		if player_animated.sprite_frames.has_animation(
-			idle_name
-		):
-
-			if player_animated.animation != idle_name:
-
-				player_animated.play(
-					idle_name
-				)
+		last_facing = "ne"
 
 
 # =========================================================
-# ATAQUE
-# =========================================================
-
-func _try_attack() -> void:
-
-	if is_dead:
-		return
-
-
-	if is_dashing:
-		return
-
-
-	if attack_cooldown_left > 0.0:
-		return
-
-
-	# La dirección del ataque queda determinada
-	# por el mouse en este instante.
-
-	_update_aim_from_mouse()
-
-
-	print(
-		"ATAQUE: ",
-		last_facing
-	)
-
-
-	attack_cooldown_left = (
-		attack_cooldown
-	)
-
-	attack_time_left = (
-		attack_duration
-	)
-
-
-	hit_targets.clear()
-
-
-	_update_attack_area()
-
-
-	attack_collision.set_deferred(
-		"disabled",
-		false
-	)
-
-
-	if show_attack_debug:
-
-		attack_debug.visible = true
-
-
-# =========================================================
-# TIMERS DEL ATAQUE
-# =========================================================
-
-func _update_attack_timers(
-	delta: float
-) -> void:
-
-	if attack_cooldown_left > 0.0:
-
-		attack_cooldown_left -= delta
-
-
-		if attack_cooldown_left < 0.0:
-
-			attack_cooldown_left = 0.0
-
-
-	if attack_time_left > 0.0:
-
-		attack_time_left -= delta
-
-
-		if attack_time_left <= 0.0:
-
-			attack_time_left = 0.0
-
-
-			attack_collision.set_deferred(
-				"disabled",
-				true
-			)
-
-
-			if attack_debug != null:
-
-				attack_debug.visible = false
-
-
-# =========================================================
-# ATAQUE SEGÚN ORIENTACIÓN DEL MOUSE
-# =========================================================
-
-func _update_attack_area() -> void:
-
-	var attack_direction: Vector2 = (
-		_get_facing_direction()
-	)
-
-
-	attack_area.position = (
-		attack_direction
-		* attack_distance
-	)
-
-
-	attack_area.rotation = (
-		attack_direction.angle()
-	)
-
-
-# =========================================================
-# CONVERTIR FACING A VECTOR
+# FACING → VECTOR
 # =========================================================
 
 func _get_facing_direction() -> Vector2:
@@ -957,58 +1941,65 @@ func _get_facing_direction() -> Vector2:
 
 
 # =========================================================
-# IMPACTO
+# IDLE
 # =========================================================
 
-func _on_attack_area_body_entered(
-	body: Node2D
-) -> void:
+func _play_idle() -> void:
 
-	print(
-		"AttackArea detectó: ",
-		body.name
+	var animation_name: String = (
+		"idle_" + last_facing
 	)
 
 
-	if attack_time_left <= 0.0:
-
-		return
-
-
-	if body in hit_targets:
-
-		return
-
-
-	if body.has_method(
-		"take_damage"
+	if player_animated.sprite_frames.has_animation(
+		animation_name
 	):
 
-		hit_targets.append(
-			body
-		)
+		if player_animated.animation != animation_name:
+
+			player_animated.play(
+				animation_name
+			)
 
 
-		body.take_damage(
-			attack_damage,
-			global_position
-		)
+# =========================================================
+# WALK
+# =========================================================
+
+func _play_walk() -> void:
+
+	var animation_name: String = (
+		"walk_" + last_facing
+	)
 
 
-		print(
-			"GOLPE CONFIRMADO | ",
-			body.name,
-			" | Daño: ",
-			attack_damage
-		)
+	if player_animated.sprite_frames.has_animation(
+		animation_name
+	):
+
+		if player_animated.animation != animation_name:
+
+			player_animated.play(
+				animation_name
+			)
 
 
 	else:
 
-		print(
-			body.name,
-			" fue detectado pero NO tiene take_damage()"
+		var idle_name: String = (
+			"idle_" + last_facing
 		)
+
+
+		if player_animated.sprite_frames.has_animation(
+			idle_name
+		):
+
+			if player_animated.animation != idle_name:
+
+				player_animated.play(
+					idle_name
+				)
 
 
 # =========================================================
@@ -1027,7 +2018,7 @@ func take_damage(
 	health -= amount
 
 
-	health = max(
+	health = maxi(
 		health,
 		0
 	)
@@ -1066,7 +2057,7 @@ func take_damage(
 
 
 # =========================================================
-# ¿SIGUE VIVO?
+# ¿VIVO?
 # =========================================================
 
 func is_alive() -> bool:
@@ -1075,7 +2066,7 @@ func is_alive() -> bool:
 
 
 # =========================================================
-# FLASH DE DAÑO
+# FLASH PLAYER
 # =========================================================
 
 func _flash_player_damage() -> void:
@@ -1088,7 +2079,9 @@ func _flash_player_damage() -> void:
 	)
 
 
-	var tween: Tween = create_tween()
+	var tween: Tween = (
+		create_tween()
+	)
 
 
 	tween.tween_property(
@@ -1114,6 +2107,13 @@ func _die() -> void:
 
 	is_dashing = false
 
+	is_sprinting = false
+
+
+	if is_charging_heavy:
+
+		_clear_heavy_charge()
+
 
 	print(
 		"=============================="
@@ -1133,18 +2133,18 @@ func _die() -> void:
 	dash_direction = Vector2.ZERO
 
 
-	attack_time_left = 0.0
+	attack_action_time_left = 0.0
 
 
-	attack_collision.set_deferred(
-		"disabled",
-		true
+	_disable_attack_hitbox()
+
+
+	_hide_all_attack_debugs()
+
+
+	player_animated.self_modulate = (
+		Color.WHITE
 	)
-
-
-	if attack_debug != null:
-
-		attack_debug.visible = false
 
 
 	player_animated.modulate = Color(
@@ -1156,38 +2156,108 @@ func _die() -> void:
 
 
 # =========================================================
-# HITBOX ROJA DEBUG
+# CREAR DEBUG SEGÚN SHAPE
 # =========================================================
 
-func _create_attack_debug() -> void:
+func _create_attack_debug(
+	area: Area2D,
+	collision: CollisionShape2D
+) -> Polygon2D:
 
-	attack_debug = Polygon2D.new()
+	var debug_polygon := Polygon2D.new()
 
 
-	attack_debug.name = (
+	debug_polygon.name = (
 		"AttackDebug"
 	)
 
 
-	attack_debug.polygon = PackedVector2Array([
-		Vector2(-35.0, -22.5),
-		Vector2(35.0, -22.5),
-		Vector2(35.0, 22.5),
-		Vector2(-35.0, 22.5)
-	])
+	if collision.shape is RectangleShape2D:
+
+		var rectangle: RectangleShape2D = (
+			collision.shape
+			as RectangleShape2D
+		)
 
 
-	attack_debug.color = Color(
+		var half_size: Vector2 = (
+			rectangle.size * 0.5
+		)
+
+
+		debug_polygon.polygon = (
+			PackedVector2Array([
+				Vector2(
+					-half_size.x,
+					-half_size.y
+				),
+
+				Vector2(
+					half_size.x,
+					-half_size.y
+				),
+
+				Vector2(
+					half_size.x,
+					half_size.y
+				),
+
+				Vector2(
+					-half_size.x,
+					half_size.y
+				)
+			])
+		)
+
+
+	else:
+
+		# Fallback provisional.
+		debug_polygon.polygon = (
+			PackedVector2Array([
+				Vector2(-35.0, -22.5),
+				Vector2(35.0, -22.5),
+				Vector2(35.0, 22.5),
+				Vector2(-35.0, 22.5)
+			])
+		)
+
+
+	debug_polygon.color = Color(
 		1.0,
 		0.0,
 		0.0,
-		0.45
+		0.40
 	)
 
 
-	attack_debug.visible = false
+	debug_polygon.visible = false
 
 
-	attack_area.add_child(
-		attack_debug
+	area.add_child(
+		debug_polygon
 	)
+
+
+	return debug_polygon
+
+
+# =========================================================
+# OCULTAR DEBUGS
+# =========================================================
+
+func _hide_all_attack_debugs() -> void:
+
+	if normal_attack_debug != null:
+
+		normal_attack_debug.visible = false
+
+
+	if heavy_attack_debug != null:
+
+		heavy_attack_debug.visible = false
+
+
+	if charged_attack_debug != null:
+
+		charged_attack_debug.visible = false
