@@ -18,6 +18,15 @@ tile_shape = 1
 tile_size = Vector2i(128, 64)
 sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_wcd18"]
+vertices = PackedVector2Array(841.5, 475.5, 1241.1016, 477, 795, 700.0469, 350.71094, 477.89844, 750.5, 475.5, 841.5, 398.5, 795.03125, 253.96094, 750.5, 398.5)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3, 4), PackedInt32Array(1, 0, 5), PackedInt32Array(6, 1, 5), PackedInt32Array(6, 5, 7), PackedInt32Array(3, 6, 7), PackedInt32Array(3, 7, 4)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(795, 226, 295, 478, 795, 728, 1297, 477)])
+parsed_geometry_type = 1
+source_geometry_mode = 1
+source_geometry_group_name = &"nav_bake"
+agent_radius = 25.0
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wcd18"]
 size = Vector2(41, 27)
 
@@ -317,10 +326,13 @@ position = Vector2(347, 31)
 tile_map_data = PackedByteArray("AAD//w0AAQAAAAAAAAAAAA4AAQAAAAAAAAAAAA8AAQAAAAAAAAABABAAAQAAAAAAAAABABEAAQAAAAAAAAACABIAAQAAAAAAAAACABMAAQAAAAAAAAADABQAAQAAAAAAAAADABMAAQAAAAAAAAAEABIAAQAAAAAAAAAEABEAAQAAAAAAAAAFABAAAQAAAAAAAAAFAA8AAQAAAAAAAAAGAA4AAQAAAAAAAAAGAA0AAQAAAAAAAAAGAAwAAQAAAAAAAAAFAAsAAQAAAAAAAAAFAAoAAQAAAAAAAAAEAAkAAQAAAAAAAAAEAAgAAQAAAAAAAAADAAcAAQAAAAAAAAADAAYAAQAAAAAAAAACAAcAAQAAAAAAAAACAAgAAQAAAAAAAAABAAkAAQAAAAAAAAABAAoAAQAAAAAAAAAAAAsAAQAAAAAAAAAAAAwAAQAAAAAAAAAAAA0AAQAAAAAAAAABAA4AAQAAAAAAAAABAA8AAQAAAAAAAAACABAAAQAAAAAAAAACABEAAQAAAAAAAAADABIAAQAAAAAAAAADABEAAQAAAAAAAAAEABAAAQAAAAAAAAAEAA8AAQAAAAAAAAAEAA4AAQAAAAAAAAAEAA0AAQAAAAAAAAAFAAwAAQAAAAAAAAAFAA0AAQAAAAAAAAAFAA4AAQAAAAAAAAAEAAwAAQAAAAAAAAADAA0AAQAAAAAAAAADAA4AAQAAAAAAAAACAA8AAQAAAAAAAAADABAAAQAAAAAAAAACAA0AAQAAAAAAAAACAAwAAQAAAAAAAAACAAsAAQAAAAAAAAABAA0AAQAAAAAAAAABAAwAAQAAAAAAAAABAAsAAQAAAAAAAAACAAoAAQAAAAAAAAACAAkAAQAAAAAAAAADAAgAAQAAAAAAAAADAAkAAQAAAAAAAAAEAAoAAQAAAAAAAAAEAAsAAQAAAAAAAAADAAsAAQAAAAAAAAADAAoAAQAAAAAAAAADAAwAAQAAAAAAAAADAA8AAQAAAAAAAAACAA4AAQAAAAAAAAA=")
 tile_set = SubResource("TileSet_wcd18")
 
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="." unique_id=188528725]
+navigation_polygon = SubResource("NavigationPolygon_wcd18")
+
 [node name="Environment" type="Node2D" parent="." unique_id=573763245]
 y_sort_enabled = true
 
-[node name="TreeTest" type="Polygon2D" parent="Environment" unique_id=815244276]
+[node name="TreeTest" type="Polygon2D" parent="Environment" unique_id=815244276 groups=["nav_bake"]]
 position = Vector2(797, 449)
 
 [node name="TreeVisual" type="Polygon2D" parent="Environment/TreeTest" unique_id=1058829222]
@@ -334,6 +346,9 @@ polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 
 position = Vector2(-1, -12)
 shape = SubResource("RectangleShape2D_wcd18")
 
+[node name="TreeNavigationObstacle" type="NavigationObstacle2D" parent="Environment/TreeTest" unique_id=1791644853 groups=["nav_bake"]]
+vertices = PackedVector2Array(-30, -36, -33, 9, 33, 14, 30, -34)
+
 [node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
 position = Vector2(668, 449)
 script = ExtResource("1_f3sb7")
@@ -343,7 +358,7 @@ position = Vector2(0, -60)
 scale = Vector2(0.3, 0.3)
 sprite_frames = SubResource("SpriteFrames_wcd18")
 animation = &"idle_s"
-frame_progress = 0.8567033
+frame_progress = 0.094853744
 
 [node name="PlayerSprite" type="Sprite2D" parent="Environment/Player" unique_id=1689358491]
 visible = false
@@ -385,7 +400,7 @@ position = Vector2(0, 4)
 shape = SubResource("CapsuleShape2D_s5k8t")
 
 [node name="Polygon2D" type="Polygon2D" parent="Environment/TestEnemy" unique_id=381788684]
-position = Vector2(-579, -480)
+position = Vector2(-583, -493)
 polygon = PackedVector2Array(562, 411, 561, 500, 605, 502, 606, 407)
 
 [node name="HealthBar" type="ProgressBar" parent="Environment/TestEnemy" unique_id=102449608]
@@ -394,6 +409,10 @@ offset_top = -101.0
 offset_right = 41.0
 offset_bottom = -74.0
 show_percentage = false
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="Environment/TestEnemy" unique_id=1015125743]
+path_desired_distance = 10.0
+target_desired_distance = 60.0
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=497129756]
 script = ExtResource("7_pkg7o")

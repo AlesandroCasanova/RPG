@@ -14,10 +14,8 @@ extends CharacterBody2D
 
 @export var move_speed: float = 120.0
 
-# Distancia a la que detecta al jugador.
 @export var detection_range: float = 350.0
 
-# Distancia a la que deja de avanzar y ataca.
 @export var attack_range: float = 70.0
 
 @export var attack_damage: int = 10
@@ -38,6 +36,9 @@ extends CharacterBody2D
 
 @onready var visual: Polygon2D = $Polygon2D
 @onready var health_bar: ProgressBar = $HealthBar
+
+@onready var navigation_agent: NavigationAgent2D = \
+	$NavigationAgent2D
 
 
 # =========================================================
@@ -72,7 +73,7 @@ func _ready() -> void:
 	health_bar.value = health
 	health_bar.show_percentage = false
 
-	# Buscar al jugador.
+	# Buscar Player.
 	player = get_tree().get_first_node_in_group(
 		"player"
 	) as CharacterBody2D
@@ -95,7 +96,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 
 	# -----------------------------------------------------
-	# COOLDOWN DE ATAQUE
+	# COOLDOWN
 	# -----------------------------------------------------
 
 	if attack_cooldown_left > 0.0:
@@ -126,7 +127,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# SIN JUGADOR
+	# SIN PLAYER
 	# -----------------------------------------------------
 
 	if not is_instance_valid(player):
@@ -135,7 +136,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# JUGADOR MUERTO
+	# PLAYER MUERTO
 	# -----------------------------------------------------
 
 	if player.has_method("is_alive"):
@@ -145,7 +146,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# DISTANCIA AL JUGADOR
+	# DISTANCIA
 	# -----------------------------------------------------
 
 	var distance_to_player := global_position.distance_to(
@@ -154,19 +155,16 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# FUERA DEL RANGO DE DETECCIÓN
+	# PLAYER LEJOS
 	# -----------------------------------------------------
 
 	if distance_to_player > detection_range:
 		velocity = Vector2.ZERO
-
-		move_and_slide()
-
 		return
 
 
 	# -----------------------------------------------------
-	# EN RANGO DE ATAQUE
+	# ATACAR
 	# -----------------------------------------------------
 
 	if distance_to_player <= attack_range:
@@ -175,20 +173,29 @@ func _physics_process(delta: float) -> void:
 		if attack_cooldown_left <= 0.0:
 			_attack_player()
 
-		move_and_slide()
-
 		return
 
 
 	# -----------------------------------------------------
-	# PERSEGUIR AL JUGADOR
+	# PATHFINDING
 	# -----------------------------------------------------
 
-	var direction_to_player := (
-		player.global_position - global_position
+	navigation_agent.target_position = (
+		player.global_position
+	)
+
+	# Consultar el siguiente punto de la ruta.
+	var next_path_position := (
+		navigation_agent.get_next_path_position()
+	)
+
+	var direction_to_next_point := (
+		next_path_position - global_position
 	).normalized()
 
-	velocity = direction_to_player * move_speed
+	velocity = (
+		direction_to_next_point * move_speed
+	)
 
 	move_and_slide()
 
@@ -199,24 +206,18 @@ func _physics_process(delta: float) -> void:
 
 func _attack_player() -> void:
 
-	# Ya no existe.
 	if not is_instance_valid(player):
 		return
 
-
-	# Está muerto.
 	if player.has_method("is_alive"):
 		if not player.is_alive():
 			return
-
 
 	attack_cooldown_left = attack_cooldown
 
 	print("ENEMIGO ATACA AL JUGADOR")
 
-	# Flash naranja provisional.
 	_attack_flash()
-
 
 	if player.has_method("take_damage"):
 		player.take_damage(
@@ -225,7 +226,7 @@ func _attack_player() -> void:
 
 
 # =========================================================
-# FLASH DE ATAQUE
+# FLASH DEL ATAQUE
 # =========================================================
 
 func _attack_flash() -> void:
@@ -256,6 +257,7 @@ func take_damage(
 ) -> void:
 
 	health -= amount
+
 	health = max(
 		health,
 		0
@@ -279,30 +281,22 @@ func take_damage(
 
 	print("==============================")
 
-
-	# Número flotante.
 	_show_damage_number(
 		amount
 	)
 
-
-	# Flash.
 	_flash_damage()
 
-
-	# Knockback.
 	_apply_knockback(
 		attacker_position
 	)
 
-
-	# Muerte.
 	if health <= 0:
 		die()
 
 
 # =========================================================
-# NÚMERO DE DAÑO FLOTANTE
+# NÚMERO DE DAÑO
 # =========================================================
 
 func _show_damage_number(
@@ -333,15 +327,11 @@ func _show_damage_number(
 		-125.0
 	)
 
-
-	# Tamaño.
 	damage_label.add_theme_font_size_override(
 		"font_size",
 		28
 	)
 
-
-	# Amarillo.
 	damage_label.add_theme_color_override(
 		"font_color",
 		Color(
@@ -352,8 +342,6 @@ func _show_damage_number(
 		)
 	)
 
-
-	# Contorno negro.
 	damage_label.add_theme_color_override(
 		"font_outline_color",
 		Color.BLACK
@@ -364,15 +352,9 @@ func _show_damage_number(
 		6
 	)
 
-
 	add_child(
 		damage_label
 	)
-
-
-	# -----------------------------------------------------
-	# ANIMACIÓN
-	# -----------------------------------------------------
 
 	var tween := create_tween()
 
@@ -380,20 +362,17 @@ func _show_damage_number(
 		true
 	)
 
-
-	# Sube.
 	tween.tween_property(
 		damage_label,
 		"position",
-		damage_label.position + Vector2(
+		damage_label.position
+		+ Vector2(
 			0.0,
 			-50.0
 		),
 		0.65
 	)
 
-
-	# Desaparece.
 	tween.tween_property(
 		damage_label,
 		"modulate:a",
@@ -403,13 +382,10 @@ func _show_damage_number(
 		0.15
 	)
 
-
 	tween.set_parallel(
 		false
 	)
 
-
-	# Borrar Label.
 	tween.tween_callback(
 		damage_label.queue_free
 	)
