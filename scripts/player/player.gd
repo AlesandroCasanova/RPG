@@ -1,37 +1,82 @@
 extends CharacterBody2D
 
+
+# =========================================================
+# MOVIMIENTO
+# =========================================================
+
 @export var speed: float = 300.0
 
-# Configuración del ataque
+
+# =========================================================
+# ATAQUE
+# =========================================================
+
+@export var attack_damage: int = 25
 @export var attack_distance: float = 55.0
-@export var attack_duration: float = 0.12
+
+# Temporalmente 1 segundo para probar.
+@export var attack_duration: float = 1.0
+
 @export var attack_cooldown: float = 0.35
+
+
+# =========================================================
+# NODOS
+# =========================================================
 
 @onready var player_animated: AnimatedSprite2D = $PlayerAnimated
 
 @onready var attack_area: Area2D = $AttackArea
 @onready var attack_collision: CollisionShape2D = $AttackArea/CollisionShape2D
 
-var attack_debug: Polygon2D
+
+# =========================================================
+# ESTADO
+# =========================================================
 
 var last_facing: String = "s"
 
 var attack_time_left: float = 0.0
 var attack_cooldown_left: float = 0.0
 
+var hit_targets: Array[Node] = []
+
+var attack_debug: Polygon2D
+
+
+# =========================================================
+# READY
+# =========================================================
 
 func _ready() -> void:
+	# PLAYER = Layer 1
+	collision_layer = 1
+
+	# AttackArea no pertenece a ninguna capa.
+	attack_area.collision_layer = 0
+
+	# AttackArea busca únicamente Layer 2.
+	attack_area.collision_mask = 2
+
+	attack_area.monitoring = true
+	attack_area.monitorable = true
+
+	# Hitbox apagada al comenzar.
 	attack_collision.disabled = true
 
-	# Rectángulo rojo provisional para ver el ataque.
+	# Cuando un cuerpo entra en AttackArea.
+	attack_area.body_entered.connect(_on_attack_area_body_entered)
+
+	# Rectángulo rojo provisional.
 	attack_debug = Polygon2D.new()
 	attack_debug.name = "AttackDebug"
 
 	attack_debug.polygon = PackedVector2Array([
-		Vector2(-35, -22.5),
-		Vector2(35, -22.5),
-		Vector2(35, 22.5),
-		Vector2(-35, 22.5)
+		Vector2(-35.0, -22.5),
+		Vector2(35.0, -22.5),
+		Vector2(35.0, 22.5),
+		Vector2(-35.0, 22.5)
 	])
 
 	attack_debug.color = Color(1.0, 0.0, 0.0, 0.45)
@@ -42,13 +87,27 @@ func _ready() -> void:
 	_play_idle()
 
 
+# =========================================================
+# PHYSICS
+# =========================================================
+
 func _physics_process(delta: float) -> void:
 	_update_attack_timers(delta)
 
-	var input_x := Input.get_axis("move_left", "move_right")
-	var input_y := Input.get_axis("move_up", "move_down")
+	var input_x := Input.get_axis(
+		"move_left",
+		"move_right"
+	)
 
-	var direction := Vector2(input_x, input_y)
+	var input_y := Input.get_axis(
+		"move_up",
+		"move_down"
+	)
+
+	var direction := Vector2(
+		input_x,
+		input_y
+	)
 
 	var iso_direction := Vector2(
 		direction.x - direction.y,
@@ -66,12 +125,15 @@ func _physics_process(delta: float) -> void:
 	else:
 		_play_idle()
 
-	# Ataque
 	if Input.is_action_just_pressed("attack"):
 		_try_attack()
 
 	move_and_slide()
 
+
+# =========================================================
+# DIRECCIÓN
+# =========================================================
 
 func _update_facing(direction: Vector2) -> void:
 	var x := direction.x
@@ -102,11 +164,16 @@ func _update_facing(direction: Vector2) -> void:
 		last_facing = "se"
 
 
+# =========================================================
+# ANIMACIONES
+# =========================================================
+
 func _play_idle() -> void:
 	var animation_name := "idle_" + last_facing
 
-	if player_animated.animation != animation_name:
-		player_animated.play(animation_name)
+	if player_animated.sprite_frames.has_animation(animation_name):
+		if player_animated.animation != animation_name:
+			player_animated.play(animation_name)
 
 
 func _play_walk() -> void:
@@ -115,12 +182,13 @@ func _play_walk() -> void:
 	if player_animated.sprite_frames.has_animation(animation_name):
 		if player_animated.animation != animation_name:
 			player_animated.play(animation_name)
+
 	else:
-		# Todavía no tenemos walk para esa dirección.
 		var idle_name := "idle_" + last_facing
 
-		if player_animated.animation != idle_name:
-			player_animated.play(idle_name)
+		if player_animated.sprite_frames.has_animation(idle_name):
+			if player_animated.animation != idle_name:
+				player_animated.play(idle_name)
 
 
 # =========================================================
@@ -136,9 +204,15 @@ func _try_attack() -> void:
 	attack_cooldown_left = attack_cooldown
 	attack_time_left = attack_duration
 
+	hit_targets.clear()
+
 	_update_attack_area()
 
-	attack_collision.set_deferred("disabled", false)
+	attack_collision.set_deferred(
+		"disabled",
+		false
+	)
+
 	attack_debug.visible = true
 
 
@@ -146,11 +220,20 @@ func _update_attack_timers(delta: float) -> void:
 	if attack_cooldown_left > 0.0:
 		attack_cooldown_left -= delta
 
+		if attack_cooldown_left < 0.0:
+			attack_cooldown_left = 0.0
+
 	if attack_time_left > 0.0:
 		attack_time_left -= delta
 
 		if attack_time_left <= 0.0:
-			attack_collision.set_deferred("disabled", true)
+			attack_time_left = 0.0
+
+			attack_collision.set_deferred(
+				"disabled",
+				true
+			)
+
 			attack_debug.visible = false
 
 
@@ -182,8 +265,42 @@ func _update_attack_area() -> void:
 		"nw":
 			attack_direction = Vector2(-1.0, -1.0).normalized()
 
-	# Coloca la hitbox delante del personaje.
-	attack_area.position = attack_direction * attack_distance
+	attack_area.position = (
+		attack_direction * attack_distance
+	)
 
-	# Rota el rectángulo para acompañar la dirección del golpe.
 	attack_area.rotation = attack_direction.angle()
+
+
+# =========================================================
+# DETECCIÓN DE GOLPE
+# =========================================================
+
+func _on_attack_area_body_entered(body: Node2D) -> void:
+	print("AttackArea detectó: ", body.name)
+
+	# Si no estamos atacando, ignoramos.
+	if attack_time_left <= 0.0:
+		return
+
+	# Un enemigo solo puede recibir un golpe por ataque.
+	if body in hit_targets:
+		return
+
+	# Comprobamos que sea un objeto dañable.
+	if body.has_method("take_damage"):
+		hit_targets.append(body)
+
+		body.take_damage(attack_damage)
+
+		print(
+			"GOLPE CONFIRMADO | ",
+			body.name,
+			" | Daño: ",
+			attack_damage
+		)
+	else:
+		print(
+			body.name,
+			" fue detectado pero NO tiene take_damage()"
+		)

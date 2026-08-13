@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://dgr5vklpoj4p4" path="res://assets/characters/player/player_sheet.png" id="3_aqk2v"]
 [ext_resource type="Texture2D" uid="uid://xitaymm80rrp" path="res://assets/characters/player/player_idle.png" id="3_tlwt5"]
 [ext_resource type="Texture2D" uid="uid://hi5u5y512nnu" path="res://assets/characters/player/player_idle_diagonal.png" id="4_036b0"]
+[ext_resource type="Script" uid="uid://dt7ijerfm5rgc" path="res://scripts/enemies/test_enemy.gd" id="6_dwbse"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
 texture = ExtResource("1_fj7yv")
@@ -303,6 +304,10 @@ height = 40.0
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_s5k8t"]
 size = Vector2(70, 45)
 
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_s5k8t"]
+radius = 20.0
+height = 40.0
+
 [node name="World" type="Node2D" unique_id=1871762989]
 
 [node name="Ground" type="TileMapLayer" parent="." unique_id=1388817698]
@@ -361,7 +366,22 @@ position_smoothing_speed = 7.0
 
 [node name="AttackArea" type="Area2D" parent="Environment/Player" unique_id=2000753498]
 position = Vector2(-668, -449)
+collision_layer = 0
+collision_mask = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/Player/AttackArea" unique_id=1496730035]
 shape = SubResource("RectangleShape2D_s5k8t")
 disabled = true
+
+[node name="TestEnemy" type="CharacterBody2D" parent="Environment" unique_id=1590616564]
+position = Vector2(534, 438)
+collision_layer = 2
+script = ExtResource("6_dwbse")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TestEnemy" unique_id=384494788]
+position = Vector2(0, 4)
+shape = SubResource("CapsuleShape2D_s5k8t")
+
+[node name="Polygon2D" type="Polygon2D" parent="Environment/TestEnemy" unique_id=381788684]
+position = Vector2(-579, -480)
+polygon = PackedVector2Array(562, 411, 561, 500, 605, 502, 606, 407)
