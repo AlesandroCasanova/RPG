@@ -14,10 +14,28 @@ extends CharacterBody2D
 
 @export var move_speed: float = 120.0
 @export var detection_range: float = 350.0
-@export var attack_range: float = 70.0
 
+@export var attack_range: float = 70.0
 @export var attack_damage: int = 10
 @export var attack_cooldown: float = 1.0
+
+
+# =========================================================
+# COMBATE GRUPAL
+# =========================================================
+
+# Cantidad máxima de enemigos que pueden atacar
+# al jugador al mismo tiempo.
+@export var max_simultaneous_attackers: int = 2
+
+# Distancia de los enemigos que tienen permiso de atacar.
+@export var attack_slot_radius: float = 58.0
+
+# Distancia de los enemigos que están esperando.
+@export var waiting_slot_radius: float = 115.0
+
+# Margen para considerar que llegó a su posición.
+@export var combat_slot_tolerance: float = 25.0
 
 
 # =========================================================
@@ -43,8 +61,11 @@ extends CharacterBody2D
 # =========================================================
 
 @onready var visual: Polygon2D = $Polygon2D
+
 @onready var health_bar: ProgressBar = $HealthBar
-@onready var navigation_agent: NavigationAgent2D = $NavigationAgent2D
+
+@onready var navigation_agent: NavigationAgent2D = \
+	$NavigationAgent2D
 
 
 # =========================================================
@@ -59,6 +80,8 @@ var attack_cooldown_left: float = 0.0
 
 var knockback_velocity: Vector2 = Vector2.ZERO
 
+var wants_navigation_movement: bool = false
+
 
 # =========================================================
 # READY
@@ -69,13 +92,17 @@ func _ready() -> void:
 
 
 	# -----------------------------------------------------
+	# GRUPO DE ENEMIGOS
+	# -----------------------------------------------------
+
+	add_to_group("enemies")
+
+
+	# -----------------------------------------------------
 	# COLISIONES
 	# -----------------------------------------------------
 
-	# Enemy = Layer 2.
 	collision_layer = 2
-
-	# Colisiona con Player / escenario Layer 1.
 	collision_mask = 1
 
 
@@ -97,10 +124,12 @@ func _ready() -> void:
 		"player"
 	) as CharacterBody2D
 
+
 	if player == null:
 		print(
 			"ERROR: TestEnemy no encontró al Player"
 		)
+
 	else:
 		print(
 			"ENEMIGO: Player encontrado"
@@ -108,12 +137,14 @@ func _ready() -> void:
 
 
 	# -----------------------------------------------------
-	# NAVIGATION AGENT
+	# AVOIDANCE
 	# -----------------------------------------------------
 
 	navigation_agent.avoidance_enabled = true
 
-	navigation_agent.radius = avoidance_radius
+	navigation_agent.radius = (
+		avoidance_radius
+	)
 
 	navigation_agent.neighbor_distance = (
 		avoidance_neighbor_distance
@@ -127,20 +158,22 @@ func _ready() -> void:
 		avoidance_time_horizon
 	)
 
-	navigation_agent.max_speed = move_speed
+	navigation_agent.max_speed = (
+		move_speed
+	)
 
-	# Todos los enemigos usan el mismo grupo de avoidance.
 	navigation_agent.avoidance_layers = 1
 	navigation_agent.avoidance_mask = 1
 
 
 	# -----------------------------------------------------
-	# SIGNAL DE AVOIDANCE
+	# SEÑAL DE AVOIDANCE
 	# -----------------------------------------------------
 
 	if not navigation_agent.velocity_computed.is_connected(
 		_on_navigation_agent_velocity_computed
 	):
+
 		navigation_agent.velocity_computed.connect(
 			_on_navigation_agent_velocity_computed
 		)
@@ -174,8 +207,8 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if knockback_velocity != Vector2.ZERO:
+		wants_navigation_movement = false
 
-		# Mientras recibe knockback no usamos avoidance.
 		navigation_agent.velocity = Vector2.ZERO
 
 		velocity = knockback_velocity
@@ -194,7 +227,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# SIN PLAYER
+	# PLAYER NO EXISTE
 	# -----------------------------------------------------
 
 	if not is_instance_valid(player):
@@ -207,7 +240,6 @@ func _physics_process(delta: float) -> void:
 	# -----------------------------------------------------
 
 	if player.has_method("is_alive"):
-
 		if not player.is_alive():
 			_stop_navigation()
 			return
@@ -217,13 +249,13 @@ func _physics_process(delta: float) -> void:
 	# DISTANCIA AL PLAYER
 	# -----------------------------------------------------
 
-	var distance_to_player := global_position.distance_to(
+	var distance_to_player: float = global_position.distance_to(
 		player.global_position
 	)
 
 
 	# -----------------------------------------------------
-	# PLAYER FUERA DE RANGO
+	# FUERA DE DETECCIÓN
 	# -----------------------------------------------------
 
 	if distance_to_player > detection_range:
@@ -232,92 +264,344 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# PLAYER EN RANGO DE ATAQUE
+	# OBTENER INFORMACIÓN DE COMBATE
 	# -----------------------------------------------------
 
-	if distance_to_player <= attack_range:
-		_stop_navigation()
+	var combat_info: Dictionary = _get_combat_info()
 
-		if attack_cooldown_left <= 0.0:
-			_attack_player()
+	var combat_position: Vector2 = combat_info["position"]
 
-		return
+	var can_attack: bool = combat_info["can_attack"]
 
-
-	# -----------------------------------------------------
-	# PATHFINDING
-	# -----------------------------------------------------
-
-	navigation_agent.target_position = (
-		player.global_position
+	var distance_to_combat_position: float = (
+		global_position.distance_to(
+			combat_position
+		)
 	)
 
 
-	# Consultar siguiente punto de la ruta.
+	# -----------------------------------------------------
+	# ESTE ENEMIGO TIENE TURNO DE ATAQUE
+	# -----------------------------------------------------
+
+	if can_attack:
+
+		# Ya no exigimos que esté exactamente
+		# sobre su slot de combate.
+		if distance_to_player <= attack_range:
+			_stop_navigation()
+
+			if attack_cooldown_left <= 0.0:
+				_attack_player()
+
+			return
+
+
+	# -----------------------------------------------------
+	# IR A SU POSICIÓN ASIGNADA
+	# -----------------------------------------------------
+
+	_move_toward_position(
+		combat_position
+	)
+
+
+# =========================================================
+# MOVERSE HACIA UNA POSICIÓN
+# =========================================================
+
+func _move_toward_position(
+	target: Vector2
+) -> void:
+
+	wants_navigation_movement = true
+
+
+	navigation_agent.target_position = (
+		target
+	)
+
+
 	var next_path_position := (
 		navigation_agent.get_next_path_position()
 	)
 
 
-	# -----------------------------------------------------
-	# DIRECCIÓN DESEADA
-	# -----------------------------------------------------
-
 	var direction_to_next_point := (
-		next_path_position - global_position
+		next_path_position
+		- global_position
 	).normalized()
 
 
 	var desired_velocity := (
-		direction_to_next_point * move_speed
+		direction_to_next_point
+		* move_speed
 	)
 
 
-	# -----------------------------------------------------
-	# ENVIAR VELOCIDAD AL SISTEMA DE AVOIDANCE
-	# -----------------------------------------------------
-
-	# NO hacemos move_and_slide() acá.
-	#
-	# Godot calculará una safe_velocity y llamará
-	# _on_navigation_agent_velocity_computed().
-	navigation_agent.velocity = desired_velocity
+	navigation_agent.velocity = (
+		desired_velocity
+	)
 
 
 # =========================================================
-# VELOCIDAD SEGURA / AVOIDANCE
+# INFORMACIÓN DE COMBATE
+# =========================================================
+
+func _get_combat_info() -> Dictionary:
+
+	var result: Dictionary = {
+		"position": player.global_position,
+		"can_attack": false
+	}
+
+
+	var active_enemies: Array[Node] = (
+		_get_active_enemies()
+	)
+
+
+	if active_enemies.is_empty():
+		return result
+
+
+	# -----------------------------------------------------
+	# ORDEN ESTABLE
+	# -----------------------------------------------------
+
+	active_enemies.sort_custom(
+		_sort_enemies_by_id
+	)
+
+
+	var my_index: int = active_enemies.find(
+		self
+	)
+
+
+	if my_index < 0:
+		return result
+
+
+	var enemy_count: int = active_enemies.size()
+
+
+	# =====================================================
+	# CANTIDAD DE ATACANTES
+	# =====================================================
+
+	var attacker_count: int = mini(
+		max_simultaneous_attackers,
+		enemy_count
+	)
+
+
+	var can_attack: bool = (
+		my_index < attacker_count
+	)
+
+
+	# =====================================================
+	# POSICIÓN DE LOS ATACANTES
+	# =====================================================
+
+	if can_attack:
+
+		var angle_step: float = (
+			TAU / float(attacker_count)
+		)
+
+
+		var angle: float = (
+			-PI / 2.0
+			+ angle_step * float(my_index)
+		)
+
+
+		var direction: Vector2 = (
+			Vector2.RIGHT.rotated(angle)
+		)
+
+
+		result["position"] = (
+			player.global_position
+			+ direction * attack_slot_radius
+		)
+
+
+		result["can_attack"] = true
+
+
+		return result
+
+
+	# =====================================================
+	# ENEMIGOS EN ESPERA
+	# =====================================================
+
+	var waiting_index: int = (
+		my_index - attacker_count
+	)
+
+
+	var waiting_count: int = (
+		enemy_count - attacker_count
+	)
+
+
+	if waiting_count <= 0:
+		return result
+
+
+	var waiting_angle_step: float = (
+		TAU / float(waiting_count)
+	)
+
+
+	# Segunda línea rotada para que no coincida
+	# exactamente con los atacantes.
+	var waiting_start_angle: float = (
+		-PI / 2.0 + PI / 4.0
+	)
+
+
+	var waiting_angle: float = (
+		waiting_start_angle
+		+ waiting_angle_step * float(waiting_index)
+	)
+
+
+	var waiting_direction: Vector2 = (
+		Vector2.RIGHT.rotated(
+			waiting_angle
+		)
+	)
+
+
+	result["position"] = (
+		player.global_position
+		+ waiting_direction * waiting_slot_radius
+	)
+
+
+	result["can_attack"] = false
+
+
+	return result
+
+
+# =========================================================
+# OBTENER ENEMIGOS ACTIVOS
+# =========================================================
+
+func _get_active_enemies() -> Array[Node]:
+
+	var all_enemies := (
+		get_tree().get_nodes_in_group(
+			"enemies"
+		)
+	)
+
+
+	var active_enemies: Array[Node] = []
+
+
+	for enemy in all_enemies:
+
+		if not is_instance_valid(enemy):
+			continue
+
+
+		if not enemy is Node2D:
+			continue
+
+
+		# Ignorar muertos.
+		if enemy.has_method("is_enemy_alive"):
+
+			if not enemy.is_enemy_alive():
+				continue
+
+
+		var enemy_2d := (
+			enemy as Node2D
+		)
+
+
+		# Solo enemigos que participan
+		# actualmente en esta pelea.
+		var distance := (
+			enemy_2d.global_position.distance_to(
+				player.global_position
+			)
+		)
+
+
+		if distance <= detection_range:
+
+			active_enemies.append(
+				enemy
+			)
+
+
+	return active_enemies
+
+
+# =========================================================
+# ORDENAR ENEMIGOS
+# =========================================================
+
+func _sort_enemies_by_id(
+	a: Node,
+	b: Node
+) -> bool:
+
+	return (
+		a.get_instance_id()
+		<
+		b.get_instance_id()
+	)
+
+
+# =========================================================
+# ¿ESTÁ VIVO?
+# =========================================================
+
+func is_enemy_alive() -> bool:
+
+	return health > 0
+
+
+# =========================================================
+# AVOIDANCE
 # =========================================================
 
 func _on_navigation_agent_velocity_computed(
 	safe_velocity: Vector2
 ) -> void:
 
-	# Si está muerto, no mover.
 	if health <= 0:
 		return
 
 
-	# Si está siendo empujado por knockback,
-	# el knockback tiene prioridad.
+	if not wants_navigation_movement:
+		return
+
+
 	if knockback_velocity != Vector2.ZERO:
 		return
 
 
-	# Player inexistente.
 	if not is_instance_valid(player):
-		velocity = Vector2.ZERO
 		return
 
 
-	# Player muerto.
 	if player.has_method("is_alive"):
 
 		if not player.is_alive():
-			velocity = Vector2.ZERO
 			return
 
 
-	# Aplicamos la velocidad corregida por avoidance.
 	velocity = safe_velocity
 
 	move_and_slide()
@@ -328,13 +612,18 @@ func _on_navigation_agent_velocity_computed(
 # =========================================================
 
 func _stop_navigation() -> void:
+
+	wants_navigation_movement = false
+
 	velocity = Vector2.ZERO
 
-	navigation_agent.velocity = Vector2.ZERO
+	navigation_agent.velocity = (
+		Vector2.ZERO
+	)
 
 
 # =========================================================
-# ATAQUE DEL ENEMIGO
+# ATAQUE
 # =========================================================
 
 func _attack_player() -> void:
@@ -349,7 +638,9 @@ func _attack_player() -> void:
 			return
 
 
-	attack_cooldown_left = attack_cooldown
+	attack_cooldown_left = (
+		attack_cooldown
+	)
 
 
 	print(
@@ -368,7 +659,7 @@ func _attack_player() -> void:
 
 
 # =========================================================
-# FLASH DEL ATAQUE
+# FLASH DE ATAQUE
 # =========================================================
 
 func _attack_flash() -> void:
@@ -439,13 +730,10 @@ func take_damage(
 	)
 
 
-	# -----------------------------------------------------
-	# FEEDBACK
-	# -----------------------------------------------------
-
 	_show_damage_number(
 		amount
 	)
+
 
 	_flash_damage()
 
@@ -455,7 +743,9 @@ func take_damage(
 	# -----------------------------------------------------
 
 	if health <= 0:
+
 		die()
+
 		return
 
 
@@ -469,7 +759,7 @@ func take_damage(
 
 
 # =========================================================
-# NÚMERO DE DAÑO FLOTANTE
+# NÚMERO DE DAÑO
 # =========================================================
 
 func _show_damage_number(
@@ -506,19 +796,11 @@ func _show_damage_number(
 	)
 
 
-	# -----------------------------------------------------
-	# TAMAÑO DE FUENTE
-	# -----------------------------------------------------
-
 	damage_label.add_theme_font_size_override(
 		"font_size",
 		28
 	)
 
-
-	# -----------------------------------------------------
-	# COLOR
-	# -----------------------------------------------------
 
 	damage_label.add_theme_color_override(
 		"font_color",
@@ -530,10 +812,6 @@ func _show_damage_number(
 		)
 	)
 
-
-	# -----------------------------------------------------
-	# CONTORNO
-	# -----------------------------------------------------
 
 	damage_label.add_theme_color_override(
 		"font_outline_color",
@@ -552,10 +830,6 @@ func _show_damage_number(
 	)
 
 
-	# -----------------------------------------------------
-	# TWEEN
-	# -----------------------------------------------------
-
 	var tween := create_tween()
 
 
@@ -564,7 +838,7 @@ func _show_damage_number(
 	)
 
 
-	# Sube.
+	# Número sube.
 	tween.tween_property(
 		damage_label,
 		"position",
@@ -577,7 +851,7 @@ func _show_damage_number(
 	)
 
 
-	# Desaparece.
+	# Número desaparece.
 	tween.tween_property(
 		damage_label,
 		"modulate:a",
@@ -593,7 +867,6 @@ func _show_damage_number(
 	)
 
 
-	# Se elimina.
 	tween.tween_callback(
 		damage_label.queue_free
 	)
@@ -633,12 +906,14 @@ func _apply_knockback(
 ) -> void:
 
 	var direction := (
-		global_position - attacker_position
+		global_position
+		- attacker_position
 	).normalized()
 
 
 	knockback_velocity = (
-		direction * knockback_force
+		direction
+		* knockback_force
 	)
 
 
@@ -661,11 +936,17 @@ func die() -> void:
 	)
 
 
-	# Detener avoidance antes de eliminar.
-	navigation_agent.avoidance_enabled = false
+	wants_navigation_movement = false
+
+	navigation_agent.avoidance_enabled = (
+		false
+	)
 
 	velocity = Vector2.ZERO
-	knockback_velocity = Vector2.ZERO
+
+	knockback_velocity = (
+		Vector2.ZERO
+	)
 
 
 	queue_free()
