@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://b50jil5mbucoe"]
+
+[ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_oejan"]
+
+[resource]
+script = ExtResource("1_oejan")
+enemy_name = "Goblin"
+max_simultaneous_attackers = 3
+metadata/_custom_type_script = "uid://bqmn1j27q23ip"

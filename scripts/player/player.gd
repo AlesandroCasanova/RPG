@@ -6,9 +6,7 @@ extends CharacterBody2D
 # =========================================================
 
 @export var speed: float = 300.0
-
 @export var sprint_speed: float = 450.0
-
 @export var sprint_stamina_per_second: float = 20.0
 
 
@@ -17,13 +15,10 @@ extends CharacterBody2D
 # =========================================================
 
 @export var max_stamina: float = 100.0
-
 @export var stamina_regen_rate: float = 25.0
-
 @export var stamina_regen_delay: float = 0.75
 
 var stamina: float = 100.0
-
 var stamina_regen_delay_left: float = 0.0
 
 var is_sprinting: bool = false
@@ -34,13 +29,9 @@ var is_sprinting: bool = false
 # =========================================================
 
 @export var dash_speed: float = 850.0
-
 @export var dash_duration: float = 0.14
-
 @export var dash_cooldown: float = 0.40
-
 @export var dash_double_tap_window: float = 0.25
-
 @export var dash_stamina_cost: float = 25.0
 
 
@@ -51,7 +42,6 @@ var is_sprinting: bool = false
 @export var max_health: int = 100
 
 var health: int = 100
-
 var is_dead: bool = false
 
 
@@ -60,12 +50,12 @@ var is_dead: bool = false
 # =========================================================
 
 @export var attack_damage: int = 25
-
 @export var attack_distance: float = 55.0
-
 @export var attack_duration: float = 0.12
-
 @export var attack_cooldown: float = 0.35
+
+@export var attack_knockback_force: float = 120.0
+@export var attack_hitstop_duration: float = 0.03
 
 
 # =========================================================
@@ -73,16 +63,17 @@ var is_dead: bool = false
 # =========================================================
 
 @export var heavy_attack_damage: int = 45
-
 @export var heavy_attack_distance: float = 65.0
-
 @export var heavy_attack_stamina_cost: float = 25.0
 
+@export var heavy_attack_max_targets: int = 2
+
 @export var heavy_attack_windup: float = 0.22
-
 @export var heavy_attack_hit_duration: float = 0.18
-
 @export var heavy_attack_total_duration: float = 0.70
+
+@export var heavy_attack_knockback_force: float = 220.0
+@export var heavy_attack_hitstop_duration: float = 0.06
 
 
 # =========================================================
@@ -92,27 +83,23 @@ var is_dead: bool = false
 @export var charged_attack_required_hold: float = 1.0
 
 @export var charged_attack_damage: int = 80
-
-# Lo dejamos en 55 porque la hitbox ya es ancha.
 @export var charged_attack_distance: float = 55.0
-
 @export var charged_attack_stamina_cost: float = 60.0
 
 @export var charged_attack_windup: float = 0.18
-
 @export var charged_attack_hit_duration: float = 0.22
-
 @export var charged_attack_total_duration: float = 0.95
 
-# Cantidad máxima de enemigos alcanzados por el barrido.
 @export var charged_attack_max_targets: int = 8
+
+@export var charged_attack_knockback_force: float = 380.0
+@export var charged_attack_hitstop_duration: float = 0.10
 
 
 # =========================================================
 # CARGA
 # =========================================================
 
-# Mientras carga, se mueve más despacio.
 @export var charge_move_multiplier: float = 0.55
 
 
@@ -124,7 +111,7 @@ var is_dead: bool = false
 
 
 # =========================================================
-# NODOS DEL PLAYER
+# NODOS
 # =========================================================
 
 @onready var player_animated: AnimatedSprite2D = (
@@ -146,7 +133,7 @@ var is_dead: bool = false
 
 
 # =========================================================
-# HITBOX PESADA
+# HITBOX PESADO
 # =========================================================
 
 @onready var heavy_attack_area: Area2D = (
@@ -159,7 +146,7 @@ var is_dead: bool = false
 
 
 # =========================================================
-# HITBOX CARGADA
+# HITBOX CARGADO
 # =========================================================
 
 @onready var charged_attack_area: Area2D = (
@@ -176,64 +163,60 @@ var is_dead: bool = false
 # =========================================================
 
 var aim_direction: Vector2 = Vector2.DOWN
-
 var last_facing: String = "s"
 
 var locked_attack_direction: Vector2 = Vector2.DOWN
 
 
 # =========================================================
-# ESTADO DE ATAQUE
+# ESTADO DEL ATAQUE
 # =========================================================
 
 var attack_action_time_left: float = 0.0
-
 var attack_hit_delay_left: float = 0.0
-
 var attack_hit_time_left: float = 0.0
 
 var attack_hitbox_active: bool = false
-
 var attack_has_resolved: bool = false
 
 var current_attack_name: String = ""
-
 var current_attack_damage: int = 0
-
 var current_attack_distance: float = 0.0
-
 var current_attack_hit_duration: float = 0.0
-
 var current_attack_max_targets: int = 1
 
+var current_attack_knockback_force: float = 0.0
+var current_attack_hitstop_duration: float = 0.0
+
 var current_attack_area: Area2D = null
-
 var current_attack_collision: CollisionShape2D = null
-
 var current_attack_debug: Polygon2D = null
 
 var hit_targets: Array[Node2D] = []
 
 
 # =========================================================
-# DEBUG DE HITBOXES
+# HITSTOP
+# =========================================================
+
+var hitstop_running: bool = false
+
+
+# =========================================================
+# DEBUG HITBOXES
 # =========================================================
 
 var normal_attack_debug: Polygon2D = null
-
 var heavy_attack_debug: Polygon2D = null
-
 var charged_attack_debug: Polygon2D = null
 
 
 # =========================================================
-# ATAQUE PESADO / CARGADO
+# ATAQUE PESADO / CARGA
 # =========================================================
 
 var is_charging_heavy: bool = false
-
 var heavy_hold_time: float = 0.0
-
 var charged_attack_ready: bool = false
 
 
@@ -246,7 +229,6 @@ var is_dashing: bool = false
 var dash_direction: Vector2 = Vector2.ZERO
 
 var dash_time_left: float = 0.0
-
 var dash_cooldown_left: float = 0.0
 
 
@@ -255,7 +237,6 @@ var dash_cooldown_left: float = 0.0
 # =========================================================
 
 var last_tap_action: String = ""
-
 var double_tap_time_left: float = 0.0
 
 
@@ -266,10 +247,11 @@ var double_tap_time_left: float = 0.0
 func _ready() -> void:
 
 	health = max_health
-
 	stamina = max_stamina
 
 	add_to_group("player")
+
+	collision_layer = 1
 
 
 	print(
@@ -279,20 +261,12 @@ func _ready() -> void:
 		max_health
 	)
 
-
 	print(
 		"STAMINA: ",
 		stamina,
 		" / ",
 		max_stamina
 	)
-
-
-	# -----------------------------------------------------
-	# PLAYER
-	# -----------------------------------------------------
-
-	collision_layer = 1
 
 
 	# -----------------------------------------------------
@@ -304,12 +278,10 @@ func _ready() -> void:
 		normal_attack_collision
 	)
 
-
 	_configure_attack_area(
 		heavy_attack_area,
 		heavy_attack_collision
 	)
-
 
 	_configure_attack_area(
 		charged_attack_area,
@@ -318,30 +290,22 @@ func _ready() -> void:
 
 
 	# -----------------------------------------------------
-	# CREAR DEBUG
+	# DEBUG HITBOXES
 	# -----------------------------------------------------
 
-	normal_attack_debug = (
-		_create_attack_debug(
-			normal_attack_area,
-			normal_attack_collision
-		)
+	normal_attack_debug = _create_attack_debug(
+		normal_attack_area,
+		normal_attack_collision
 	)
 
-
-	heavy_attack_debug = (
-		_create_attack_debug(
-			heavy_attack_area,
-			heavy_attack_collision
-		)
+	heavy_attack_debug = _create_attack_debug(
+		heavy_attack_area,
+		heavy_attack_collision
 	)
 
-
-	charged_attack_debug = (
-		_create_attack_debug(
-			charged_attack_area,
-			charged_attack_collision
-		)
+	charged_attack_debug = _create_attack_debug(
+		charged_attack_area,
+		charged_attack_collision
 	)
 
 
@@ -351,7 +315,7 @@ func _ready() -> void:
 
 
 # =========================================================
-# CONFIGURAR AREA DE ATAQUE
+# CONFIGURAR HITBOX
 # =========================================================
 
 func _configure_attack_area(
@@ -360,13 +324,9 @@ func _configure_attack_area(
 ) -> void:
 
 	area.collision_layer = 0
-
 	area.collision_mask = 2
 
-	# El daño se resolverá mediante consultas físicas.
-	# No necesitamos body_entered.
 	area.monitoring = false
-
 	area.monitorable = false
 
 	collision.disabled = true
@@ -400,17 +360,13 @@ func _physics_process(delta: float) -> void:
 	# APUNTADO
 	# -----------------------------------------------------
 
-	# Durante la carga se puede seguir apuntando.
-	#
-	# Cuando el golpe ya comenzó,
-	# se bloquea su dirección.
 	if attack_action_time_left <= 0.0:
 
 		_update_aim_from_mouse()
 
 
 	# -----------------------------------------------------
-	# CLICK DERECHO
+	# PESADO / CARGADO
 	# -----------------------------------------------------
 
 	_update_heavy_attack_input(
@@ -433,12 +389,10 @@ func _physics_process(delta: float) -> void:
 
 		is_sprinting = false
 
-
 		velocity = (
 			dash_direction
 			* dash_speed
 		)
-
 
 		_play_walk()
 
@@ -456,12 +410,10 @@ func _physics_process(delta: float) -> void:
 		"move_right"
 	)
 
-
 	var input_y: float = Input.get_axis(
 		"move_up",
 		"move_down"
 	)
-
 
 	var movement_input: Vector2 = Vector2(
 		input_x,
@@ -492,11 +444,10 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# VELOCIDAD
+	# VELOCIDAD BASE
 	# -----------------------------------------------------
 
 	is_sprinting = false
-
 
 	var current_move_speed: float = speed
 
@@ -524,7 +475,6 @@ func _physics_process(delta: float) -> void:
 
 		current_move_speed = sprint_speed
 
-
 		_drain_stamina(
 			sprint_stamina_per_second
 			* delta
@@ -549,7 +499,7 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
-	# ANIMACIÓN
+	# ANIMACIONES
 	# -----------------------------------------------------
 
 	if movement_input != Vector2.ZERO:
@@ -586,7 +536,8 @@ func _update_stamina_regen(
 	if stamina_regen_delay_left > 0.0:
 
 		stamina_regen_delay_left = maxf(
-			stamina_regen_delay_left - delta,
+			stamina_regen_delay_left
+			- delta,
 			0.0
 		)
 
@@ -608,7 +559,8 @@ func _update_stamina_regen(
 	stamina = minf(
 		max_stamina,
 		stamina
-		+ stamina_regen_rate * delta
+		+ stamina_regen_rate
+		* delta
 	)
 
 
@@ -787,7 +739,7 @@ func _begin_heavy_charge() -> void:
 
 
 # =========================================================
-# SOLTAR CLICK DERECHO
+# SOLTAR PESADO / CARGADO
 # =========================================================
 
 func _release_heavy_attack() -> void:
@@ -820,7 +772,9 @@ func _release_heavy_attack() -> void:
 				charged_attack_area,
 				charged_attack_collision,
 				charged_attack_debug,
-				charged_attack_max_targets
+				charged_attack_max_targets,
+				charged_attack_knockback_force,
+				charged_attack_hitstop_duration
 			)
 
 
@@ -858,7 +812,9 @@ func _release_heavy_attack() -> void:
 			heavy_attack_area,
 			heavy_attack_collision,
 			heavy_attack_debug,
-			1
+			heavy_attack_max_targets,
+			heavy_attack_knockback_force,
+			heavy_attack_hitstop_duration
 		)
 
 
@@ -950,7 +906,9 @@ func _try_normal_attack() -> void:
 		normal_attack_area,
 		normal_attack_collision,
 		normal_attack_debug,
-		1
+		1,
+		attack_knockback_force,
+		attack_hitstop_duration
 	)
 
 
@@ -961,7 +919,7 @@ func _try_normal_attack() -> void:
 
 
 # =========================================================
-# COMENZAR ATAQUE
+# COMENZAR CUALQUIER ATAQUE
 # =========================================================
 
 func _start_attack(
@@ -974,24 +932,50 @@ func _start_attack(
 	area: Area2D,
 	collision: CollisionShape2D,
 	debug_polygon: Polygon2D,
-	max_targets: int
+	max_targets: int,
+	knockback_strength: float,
+	hitstop_duration: float
 ) -> void:
 
-	current_attack_name = attack_name
+	current_attack_name = (
+		attack_name
+	)
 
-	current_attack_damage = damage
+	current_attack_damage = (
+		damage
+	)
 
-	current_attack_distance = distance
+	current_attack_distance = (
+		distance
+	)
 
-	current_attack_hit_duration = hit_duration
+	current_attack_hit_duration = (
+		hit_duration
+	)
 
-	current_attack_max_targets = max_targets
+	current_attack_max_targets = (
+		max_targets
+	)
 
-	current_attack_area = area
+	current_attack_knockback_force = (
+		knockback_strength
+	)
 
-	current_attack_collision = collision
+	current_attack_hitstop_duration = (
+		hitstop_duration
+	)
 
-	current_attack_debug = debug_polygon
+	current_attack_area = (
+		area
+	)
+
+	current_attack_collision = (
+		collision
+	)
+
+	current_attack_debug = (
+		debug_polygon
+	)
 
 
 	# -----------------------------------------------------
@@ -1021,11 +1005,9 @@ func _start_attack(
 		total_duration
 	)
 
-
 	attack_hit_delay_left = (
 		hit_delay
 	)
-
 
 	attack_hit_time_left = 0.0
 
@@ -1038,7 +1020,7 @@ func _start_attack(
 
 
 	# -----------------------------------------------------
-	# SIN WINDUP
+	# ATAQUE SIN WINDUP
 	# -----------------------------------------------------
 
 	if hit_delay <= 0.0:
@@ -1064,7 +1046,8 @@ func _update_attack_state(
 	# -----------------------------------------------------
 
 	attack_action_time_left = maxf(
-		attack_action_time_left - delta,
+		attack_action_time_left
+		- delta,
 		0.0
 	)
 
@@ -1080,7 +1063,8 @@ func _update_attack_state(
 	):
 
 		attack_hit_delay_left = maxf(
-			attack_hit_delay_left - delta,
+			attack_hit_delay_left
+			- delta,
 			0.0
 		)
 
@@ -1091,13 +1075,14 @@ func _update_attack_state(
 
 
 	# -----------------------------------------------------
-	# HITBOX
+	# HITBOX ACTIVA
 	# -----------------------------------------------------
 
 	if attack_hitbox_active:
 
 		attack_hit_time_left = maxf(
-			attack_hit_time_left - delta,
+			attack_hit_time_left
+			- delta,
 			0.0
 		)
 
@@ -1108,7 +1093,7 @@ func _update_attack_state(
 
 
 	# -----------------------------------------------------
-	# FIN TOTAL
+	# FIN
 	# -----------------------------------------------------
 
 	if attack_action_time_left <= 0.0:
@@ -1144,7 +1129,7 @@ func _activate_attack_hitbox() -> void:
 		current_attack_debug.visible = true
 
 
-	# El impacto ocurre en este momento exacto.
+	# El impacto ocurre acá.
 	_resolve_attack_hits()
 
 
@@ -1165,7 +1150,7 @@ func _disable_attack_hitbox() -> void:
 
 
 # =========================================================
-# TERMINAR ATAQUE
+# FINALIZAR ATAQUE
 # =========================================================
 
 func _finish_attack() -> void:
@@ -1188,6 +1173,10 @@ func _finish_attack() -> void:
 
 	current_attack_max_targets = 1
 
+	current_attack_knockback_force = 0.0
+
+	current_attack_hitstop_duration = 0.0
+
 
 	current_attack_area = null
 
@@ -1200,7 +1189,7 @@ func _finish_attack() -> void:
 
 
 # =========================================================
-# POSICIONAR HITBOX ACTUAL
+# POSICIONAR HITBOX
 # =========================================================
 
 func _update_current_attack_area() -> void:
@@ -1240,10 +1229,6 @@ func _resolve_attack_hits() -> void:
 	attack_has_resolved = true
 
 
-	# -----------------------------------------------------
-	# CANDIDATOS DENTRO DE LA HITBOX
-	# -----------------------------------------------------
-
 	var candidates: Array[Node2D] = (
 		_get_attack_candidates()
 	)
@@ -1254,7 +1239,6 @@ func _resolve_attack_hits() -> void:
 		return
 
 
-	# El más cercano se procesa primero.
 	candidates.sort_custom(
 		_sort_targets_by_distance
 	)
@@ -1283,7 +1267,7 @@ func _resolve_attack_hits() -> void:
 
 
 		# -------------------------------------------------
-		# ¿HAY ALGUIEN / ALGO TAPÁNDOLO?
+		# BLOQUEO
 		# -------------------------------------------------
 
 		if not _has_clear_attack_line(
@@ -1294,7 +1278,7 @@ func _resolve_attack_hits() -> void:
 
 
 		# -------------------------------------------------
-		# GOLPE
+		# IMPACTO
 		# -------------------------------------------------
 
 		hit_targets.append(
@@ -1304,7 +1288,8 @@ func _resolve_attack_hits() -> void:
 
 		target.take_damage(
 			current_attack_damage,
-			global_position
+			global_position,
+			current_attack_knockback_force
 		)
 
 
@@ -1317,12 +1302,74 @@ func _resolve_attack_hits() -> void:
 			" | ",
 			target.name,
 			" | Daño: ",
-			current_attack_damage
+			current_attack_damage,
+			" | Knockback: ",
+			current_attack_knockback_force
+		)
+
+
+	# -----------------------------------------------------
+	# HITSTOP
+	# -----------------------------------------------------
+
+	# Aunque alcance a varios enemigos,
+	# hacemos un solo hitstop por golpe.
+	if targets_hit > 0:
+
+		_apply_hitstop(
+			current_attack_hitstop_duration
 		)
 
 
 # =========================================================
-# OBTENER OBJETIVOS DENTRO DE LA HITBOX
+# HITSTOP
+# =========================================================
+
+func _apply_hitstop(
+	duration: float
+) -> void:
+
+	if duration <= 0.0:
+
+		return
+
+
+	if hitstop_running:
+
+		return
+
+
+	hitstop_running = true
+
+
+	var previous_time_scale: float = (
+		Engine.time_scale
+	)
+
+
+	# Queda al 5% por unos milisegundos.
+	Engine.time_scale = 0.05
+
+
+	# Este timer ignora Engine.time_scale.
+	await get_tree().create_timer(
+		duration,
+		true,
+		false,
+		true
+	).timeout
+
+
+	Engine.time_scale = (
+		previous_time_scale
+	)
+
+
+	hitstop_running = false
+
+
+# =========================================================
+# OBTENER CANDIDATOS DE LA HITBOX
 # =========================================================
 
 func _get_attack_candidates() -> Array[Node2D]:
@@ -1358,9 +1405,7 @@ func _get_attack_candidates() -> Array[Node2D]:
 	# Enemigos = Layer 2.
 	query.collision_mask = 2
 
-
 	query.collide_with_bodies = true
-
 	query.collide_with_areas = false
 
 
@@ -1369,7 +1414,9 @@ func _get_attack_candidates() -> Array[Node2D]:
 	]
 
 
-	query.exclude = excluded
+	query.exclude = (
+		excluded
+	)
 
 
 	var space_state := (
@@ -1427,7 +1474,7 @@ func _get_attack_candidates() -> Array[Node2D]:
 
 
 # =========================================================
-# ORDENAR OBJETIVOS POR DISTANCIA
+# ORDENAR OBJETIVOS
 # =========================================================
 
 func _sort_targets_by_distance(
@@ -1449,11 +1496,13 @@ func _sort_targets_by_distance(
 	)
 
 
-	return distance_a < distance_b
+	return (
+		distance_a < distance_b
+	)
 
 
 # =========================================================
-# COMPROBAR BLOQUEO
+# ¿HAY ALGO DELANTE?
 # =========================================================
 
 func _has_clear_attack_line(
@@ -1468,16 +1517,11 @@ func _has_clear_attack_line(
 	)
 
 
-	# Layer 1:
-	# Player / árboles / paredes.
-	#
-	# Layer 2:
-	# Enemigos.
+	# Layer 1 = escenario.
+	# Layer 2 = enemigos.
 	ray_query.collision_mask = 3
 
-
 	ray_query.collide_with_bodies = true
-
 	ray_query.collide_with_areas = false
 
 
@@ -1486,7 +1530,9 @@ func _has_clear_attack_line(
 	]
 
 
-	ray_query.exclude = excluded
+	ray_query.exclude = (
+		excluded
+	)
 
 
 	var space_state := (
@@ -1501,7 +1547,6 @@ func _has_clear_attack_line(
 	)
 
 
-	# Si no encontró nada, dejamos pasar.
 	if result.is_empty():
 
 		return true
@@ -1514,9 +1559,9 @@ func _has_clear_attack_line(
 	)
 
 
-	# El primer objeto encontrado tiene que ser
-	# exactamente el enemigo al que queremos golpear.
-	return collider_value == target
+	return (
+		collider_value == target
+	)
 
 
 # =========================================================
@@ -1566,7 +1611,7 @@ func _handle_dash_input() -> void:
 
 
 # =========================================================
-# REGISTRAR DOBLE TOQUE
+# DOBLE TOQUE
 # =========================================================
 
 func _register_direction_tap(
@@ -1600,7 +1645,9 @@ func _register_direction_tap(
 		return
 
 
-	last_tap_action = action_name
+	last_tap_action = (
+		action_name
+	)
 
 
 	double_tap_time_left = (
@@ -1609,7 +1656,7 @@ func _register_direction_tap(
 
 
 # =========================================================
-# DASH
+# COMENZAR DASH
 # =========================================================
 
 func _start_dash(
@@ -1622,8 +1669,6 @@ func _start_dash(
 		return
 
 
-	# Primero comprobamos stamina.
-	# Si no alcanza, no cancelamos la carga.
 	if stamina < dash_stamina_cost:
 
 		print(
@@ -1633,7 +1678,6 @@ func _start_dash(
 		return
 
 
-	# Dash cancela una carga.
 	if is_charging_heavy:
 
 		_cancel_heavy_charge()
@@ -1704,7 +1748,8 @@ func _update_dash_timers(
 	if dash_cooldown_left > 0.0:
 
 		dash_cooldown_left = maxf(
-			dash_cooldown_left - delta,
+			dash_cooldown_left
+			- delta,
 			0.0
 		)
 
@@ -1712,7 +1757,8 @@ func _update_dash_timers(
 	if double_tap_time_left > 0.0:
 
 		double_tap_time_left = maxf(
-			double_tap_time_left - delta,
+			double_tap_time_left
+			- delta,
 			0.0
 		)
 
@@ -1725,7 +1771,8 @@ func _update_dash_timers(
 	if is_dashing:
 
 		dash_time_left = maxf(
-			dash_time_left - delta,
+			dash_time_left
+			- delta,
 			0.0
 		)
 
@@ -1874,63 +1921,36 @@ func _get_facing_direction() -> Vector2:
 	match last_facing:
 
 		"n":
-
-			return Vector2(
-				0.0,
-				-1.0
-			)
-
+			return Vector2(0.0, -1.0)
 
 		"ne":
-
 			return Vector2(
 				1.0,
 				-1.0
 			).normalized()
 
-
 		"e":
-
-			return Vector2(
-				1.0,
-				0.0
-			)
-
+			return Vector2(1.0, 0.0)
 
 		"se":
-
 			return Vector2(
 				1.0,
 				1.0
 			).normalized()
 
-
 		"s":
-
-			return Vector2(
-				0.0,
-				1.0
-			)
-
+			return Vector2(0.0, 1.0)
 
 		"sw":
-
 			return Vector2(
 				-1.0,
 				1.0
 			).normalized()
 
-
 		"w":
-
-			return Vector2(
-				-1.0,
-				0.0
-			)
-
+			return Vector2(-1.0, 0.0)
 
 		"nw":
-
 			return Vector2(
 				-1.0,
 				-1.0
@@ -2138,7 +2158,6 @@ func _die() -> void:
 
 	_disable_attack_hitbox()
 
-
 	_hide_all_attack_debugs()
 
 
@@ -2156,7 +2175,7 @@ func _die() -> void:
 
 
 # =========================================================
-# CREAR DEBUG SEGÚN SHAPE
+# CREAR DEBUG SEGÚN LA HITBOX
 # =========================================================
 
 func _create_attack_debug(
@@ -2164,7 +2183,9 @@ func _create_attack_debug(
 	collision: CollisionShape2D
 ) -> Polygon2D:
 
-	var debug_polygon := Polygon2D.new()
+	var debug_polygon := (
+		Polygon2D.new()
+	)
 
 
 	debug_polygon.name = (
@@ -2181,7 +2202,8 @@ func _create_attack_debug(
 
 
 		var half_size: Vector2 = (
-			rectangle.size * 0.5
+			rectangle.size
+			* 0.5
 		)
 
 
@@ -2212,7 +2234,6 @@ func _create_attack_debug(
 
 	else:
 
-		# Fallback provisional.
 		debug_polygon.polygon = (
 			PackedVector2Array([
 				Vector2(-35.0, -22.5),

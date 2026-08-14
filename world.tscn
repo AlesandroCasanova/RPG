@@ -1,12 +1,13 @@
 [gd_scene format=4 uid="uid://c0w8tw112g17q"]
 
 [ext_resource type="Script" uid="uid://5ett0pwsrhtb" path="res://scripts/player/player.gd" id="1_f3sb7"]
-[ext_resource type="Texture2D" uid="uid://dev6hjbg6su3" path="res://assets/tiles/ground_test 2.png" id="1_fj7yv"]
-[ext_resource type="Texture2D" uid="uid://dgr5vklpoj4p4" path="res://assets/characters/player/player_sheet.png" id="3_aqk2v"]
-[ext_resource type="Texture2D" uid="uid://xitaymm80rrp" path="res://assets/characters/player/player_idle.png" id="3_tlwt5"]
-[ext_resource type="Texture2D" uid="uid://hi5u5y512nnu" path="res://assets/characters/player/player_idle_diagonal.png" id="4_036b0"]
-[ext_resource type="PackedScene" uid="uid://cfc4t7yd0ta14" path="res://scenes/enemies/test_enemy.tscn" id="6_pkg7o"]
+[ext_resource type="Texture2D" uid="uid://dev6hjbg6su3" path="res://assets/enviroment/terrain/ground_test 2.png" id="1_fj7yv"]
+[ext_resource type="Texture2D" uid="uid://6qn4d40gbwtl" path="res://assets/enviroment/vegetation/trees/tree_01.png" id="2_gbfbk"]
+[ext_resource type="Texture2D" uid="uid://dgr5vklpoj4p4" path="res://assets/characters/player/sprites/idle/player_sheet.png" id="3_aqk2v"]
+[ext_resource type="Texture2D" uid="uid://xitaymm80rrp" path="res://assets/characters/player/sprites/idle/player_idle.png" id="3_tlwt5"]
+[ext_resource type="Texture2D" uid="uid://hi5u5y512nnu" path="res://assets/characters/player/sprites/idle/player_idle_diagonal.png" id="4_036b0"]
 [ext_resource type="Script" uid="uid://bkleq6luic3go" path="res://scripts/ui/hud.gd" id="7_pkg7o"]
+[ext_resource type="PackedScene" uid="uid://e81fugeluhil" path="res://scenes/enemies/goblin/goblin.tscn" id="9_ioo17"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
 texture = ExtResource("1_fj7yv")
@@ -19,8 +20,8 @@ tile_size = Vector2i(128, 64)
 sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 
 [sub_resource type="NavigationPolygon" id="NavigationPolygon_wcd18"]
-vertices = PackedVector2Array(841.5, 475.5, 1241.1016, 477, 795, 700.0469, 350.71094, 477.89844, 750.5, 475.5, 841.5, 398.5, 795.03125, 253.96094, 750.5, 398.5)
-polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3, 4), PackedInt32Array(1, 0, 5), PackedInt32Array(6, 1, 5), PackedInt32Array(6, 5, 7), PackedInt32Array(3, 6, 7), PackedInt32Array(3, 7, 4)])
+vertices = PackedVector2Array(866, 505, 1241.1016, 477, 795, 700.0469, 717.5, 505, 350.71094, 477.89844, 866, 381, 795.03125, 253.96094, 717.5, 381)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2), PackedInt32Array(3, 0, 2), PackedInt32Array(3, 2, 4), PackedInt32Array(1, 0, 5), PackedInt32Array(6, 1, 5), PackedInt32Array(6, 5, 7), PackedInt32Array(4, 6, 7), PackedInt32Array(4, 7, 3)])
 outlines = Array[PackedVector2Array]([PackedVector2Array(795, 226, 295, 478, 795, 728, 1297, 477)])
 parsed_geometry_type = 1
 source_geometry_mode = 1
@@ -28,7 +29,7 @@ source_geometry_group_name = &"nav_bake"
 agent_radius = 25.0
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wcd18"]
-size = Vector2(41, 27)
+size = Vector2(98.5, 74)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_aqk2v"]
 atlas = ExtResource("3_aqk2v")
@@ -338,6 +339,7 @@ y_sort_enabled = true
 position = Vector2(797, 449)
 
 [node name="TreeVisual" type="Polygon2D" parent="Environment/TreeTest" unique_id=1058829222]
+visible = false
 position = Vector2(-736, -463)
 color = Color(0, 1, 0, 1)
 polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 826, 373, 738, 196, 646, 361, 710, 371)
@@ -345,11 +347,16 @@ polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 
 [node name="TreeColision" type="StaticBody2D" parent="Environment/TreeTest" unique_id=369145233]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TreeTest/TreeColision" unique_id=172844242]
-position = Vector2(-1, -12)
+position = Vector2(-5.25, -6)
 shape = SubResource("RectangleShape2D_wcd18")
 
 [node name="TreeNavigationObstacle" type="NavigationObstacle2D" parent="Environment/TreeTest" unique_id=1791644853 groups=["nav_bake"]]
 vertices = PackedVector2Array(-30, -36, -33, 9, 33, 14, 30, -34)
+
+[node name="TreeSprite" type="Sprite2D" parent="Environment/TreeTest" unique_id=52081910]
+position = Vector2(-10, -117)
+scale = Vector2(0.2, 0.29433593)
+texture = ExtResource("2_gbfbk")
 
 [node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
 position = Vector2(1079, 513)
@@ -410,30 +417,6 @@ collision_mask = 2
 shape = SubResource("RectangleShape2D_gbfbk")
 disabled = true
 
-[node name="TestEnemy" parent="Environment" unique_id=753756473 instance=ExtResource("6_pkg7o")]
-position = Vector2(534, 438)
-
-[node name="TestEnemy2" parent="Environment" unique_id=210784202 instance=ExtResource("6_pkg7o")]
-position = Vector2(696, 332)
-
-[node name="TestEnemy3" parent="Environment" unique_id=278465869 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
-[node name="TestEnemy4" parent="Environment" unique_id=380728016 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
-[node name="TestEnemy5" parent="Environment" unique_id=166988120 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
-[node name="TestEnemy6" parent="Environment" unique_id=755120559 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
-[node name="TestEnemy7" parent="Environment" unique_id=1706655457 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
-[node name="TestEnemy8" parent="Environment" unique_id=732616050 instance=ExtResource("6_pkg7o")]
-position = Vector2(582, 552)
-
 [node name="HUD" type="CanvasLayer" parent="." unique_id=497129756]
 script = ExtResource("7_pkg7o")
 
@@ -471,3 +454,12 @@ offset_top = 50.0
 offset_right = 177.0
 offset_bottom = 73.0
 text = "100 / 100"
+
+[node name="Goblin" parent="." unique_id=145435098 instance=ExtResource("9_ioo17")]
+position = Vector2(669, 415)
+
+[node name="Goblin2" parent="." unique_id=2094493439 instance=ExtResource("9_ioo17")]
+position = Vector2(783, 411)
+
+[node name="Goblin3" parent="." unique_id=534537962 instance=ExtResource("9_ioo17")]
+position = Vector2(723, 507)

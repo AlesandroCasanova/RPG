@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://d78ps477kn73"]
+
+[ext_resource type="Script" uid="uid://qjax07qgytth" path="res://scripts/enemies/base/enemy.gd" id="1_8033p"]
+
+[node name="EnemyBase" type="CharacterBody2D" unique_id=544722118]
+script = ExtResource("1_8033p")
+
+[node name="EnemyAnimated" type="AnimatedSprite2D" parent="." unique_id=789413155]
+
+[node name="BodyCollision" type="CollisionShape2D" parent="." unique_id=1284503998]
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="." unique_id=519080068]
+
+[node name="HealthBar" type="ProgressBar" parent="." unique_id=672827209]
+offset_right = 4.0
+offset_bottom = 27.0
+
+[node name="AttackArea" type="Area2D" parent="." unique_id=42903477]
+
+[node name="AttackCollision" type="CollisionShape2D" parent="AttackArea" unique_id=1887387199]

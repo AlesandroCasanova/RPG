@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AttackData" format=3 uid="uid://513mborvsrne"]
+
+[ext_resource type="Script" uid="uid://clpsiijig5hmg" path="res://scripts/combat/attack_data.gd" id="1_h8g74"]
+
+[resource]
+script = ExtResource("1_h8g74")
+attack_name = "Goblin Slash"
+damage = 3
+metadata/_custom_type_script = "uid://clpsiijig5hmg"
