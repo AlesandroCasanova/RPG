@@ -89,6 +89,10 @@ var attack_cooldown_left: float = 0.0
 
 var knockback_velocity: Vector2 = Vector2.ZERO
 
+# Tiempo durante el cual el enemigo queda recuperándose
+# DESPUÉS de terminar un knockback suficientemente fuerte.
+var stagger_recovery_time_left: float = 0.0
+
 var wants_navigation_movement: bool = false
 
 
@@ -546,6 +550,22 @@ func _physics_process(
 
 
 	# =====================================================
+	# RECUPERACIÓN / STAGGER
+	#
+	# Un knockback fuerte puede dejar al enemigo unos
+	# instantes sin moverse ni atacar después del empuje.
+	# =====================================================
+
+	if stagger_recovery_time_left > 0.0:
+
+		_process_stagger_recovery(
+			delta
+		)
+
+		return
+
+
+	# =====================================================
 	# PLAYER
 	# =====================================================
 
@@ -744,6 +764,151 @@ func _process_knockback(
 	if debug_combat:
 
 		queue_redraw()
+
+
+# =========================================================
+# RECUPERACIÓN DESPUÉS DE KNOCKBACK FUERTE
+# =========================================================
+
+func _process_stagger_recovery(
+	delta: float
+) -> void:
+
+	wants_navigation_movement = false
+
+	velocity = Vector2.ZERO
+
+	navigation_agent.velocity = (
+		Vector2.ZERO
+	)
+
+
+	stagger_recovery_time_left = maxf(
+		stagger_recovery_time_left
+		- delta,
+		0.0
+	)
+
+
+	debug_can_attack = false
+	debug_hitbox_reaches_player = false
+
+
+	if debug_combat:
+
+		queue_redraw()
+
+
+# =========================================================
+# CALCULAR DURACIÓN DE RECUPERACIÓN
+# =========================================================
+
+func _calculate_stagger_recovery_duration(
+	effective_knockback: float
+) -> float:
+
+	# -----------------------------------------------------
+	# UMBRAL
+	#
+	# Debe SUPERAR el umbral para provocar stagger.
+	# -----------------------------------------------------
+
+	var threshold: float = maxf(
+		enemy_data.stagger_threshold,
+		0.0
+	)
+
+
+	if effective_knockback <= threshold:
+
+		return 0.0
+
+
+	# -----------------------------------------------------
+	# DURACIONES
+	# -----------------------------------------------------
+
+	var min_duration: float = maxf(
+		enemy_data.stagger_min_duration,
+		0.0
+	)
+
+
+	var max_duration: float = maxf(
+		enemy_data.stagger_max_duration,
+		min_duration
+	)
+
+
+	# -----------------------------------------------------
+	# FUERZA QUE YA PRODUCE LA DURACIÓN MÁXIMA
+	# -----------------------------------------------------
+
+	var force_for_max: float = maxf(
+		enemy_data.stagger_force_for_max_duration,
+		threshold + 1.0
+	)
+
+
+	var strength_ratio: float = clampf(
+		(
+			effective_knockback
+			- threshold
+		)
+		/
+		(
+			force_for_max
+			- threshold
+		),
+		0.0,
+		1.0
+	)
+
+
+	return lerpf(
+		min_duration,
+		max_duration,
+		strength_ratio
+	)
+
+
+# =========================================================
+# OBTENER KNOCKBACK EFECTIVO
+# =========================================================
+
+func _get_effective_knockback(
+	received_knockback: float
+) -> float:
+
+	var base_knockback: float = (
+		enemy_data.knockback_force
+	)
+
+
+	# Si el ataque/habilidad especifica una fuerza,
+	# usamos esa en vez del valor fallback del enemigo.
+	if received_knockback >= 0.0:
+
+		base_knockback = (
+			received_knockback
+		)
+
+
+	var resistance: float = clampf(
+		enemy_data.knockback_resistance,
+		0.0,
+		1.0
+	)
+
+
+	return maxf(
+		base_knockback
+		* (
+			1.0
+			- resistance
+		),
+		0.0
+	)
 
 
 # =========================================================
@@ -1702,6 +1867,18 @@ func is_combat_active() -> bool:
 		return false
 
 
+	# Un enemigo empujado o recuperándose no debe reservar
+	# un slot de ataque mientras no puede combatir.
+	if knockback_velocity != Vector2.ZERO:
+
+		return false
+
+
+	if stagger_recovery_time_left > 0.0:
+
+		return false
+
+
 	if not is_instance_valid(
 		player
 	):
@@ -2198,44 +2375,68 @@ func _apply_knockback(
 
 
 	# -----------------------------------------------------
-	# FUERZA BASE
+	# KNOCKBACK EFECTIVO
+	#
+	# La resistencia del tipo de enemigo se aplica ANTES
+	# tanto del empuje físico como del cálculo de stagger.
 	# -----------------------------------------------------
 
-	var final_knockback: float = (
-		enemy_data.knockback_force
-	)
-
-
-	# Si el ataque especificó una fuerza,
-	# usamos esa.
-	if received_knockback >= 0.0:
-
-		final_knockback = (
+	var effective_knockback: float = (
+		_get_effective_knockback(
 			received_knockback
 		)
-
-
-	# -----------------------------------------------------
-	# RESISTENCIA DEL ENEMIGO
-	# -----------------------------------------------------
-
-	var resistance: float = clampf(
-		enemy_data.knockback_resistance,
-		0.0,
-		1.0
 	)
 
 
-	final_knockback *= (
-		1.0
-		- resistance
-	)
+	if effective_knockback <= 0.0:
 
+		return
+
+
+	# -----------------------------------------------------
+	# EMPUJE FÍSICO
+	# -----------------------------------------------------
 
 	knockback_velocity = (
 		direction
-		* final_knockback
+		* effective_knockback
 	)
+
+
+	# -----------------------------------------------------
+	# STAGGER / RECUPERACIÓN
+	#
+	# Golpes leves:
+	# solo empujan.
+	#
+	# Golpes que superan stagger_threshold:
+	# además dejan un pequeño tiempo de recuperación una
+	# vez que termina el desplazamiento.
+	# -----------------------------------------------------
+
+	var recovery_duration: float = (
+		_calculate_stagger_recovery_duration(
+			effective_knockback
+		)
+	)
+
+
+	if recovery_duration > 0.0:
+
+		stagger_recovery_time_left = maxf(
+			stagger_recovery_time_left,
+			recovery_duration
+		)
+
+
+		print(
+			enemy_data.enemy_name,
+			" ENTRA EN STAGGER | Knockback efectivo: ",
+			effective_knockback,
+			" | Recuperación: ",
+			recovery_duration,
+			" s"
+		)
 
 
 # =========================================================
@@ -2272,6 +2473,8 @@ func die() -> void:
 	knockback_velocity = (
 		Vector2.ZERO
 	)
+
+	stagger_recovery_time_left = 0.0
 
 
 	queue_free()
