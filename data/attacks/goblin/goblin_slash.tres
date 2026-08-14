@@ -6,4 +6,5 @@
 script = ExtResource("1_h8g74")
 attack_name = "Goblin Slash"
 damage = 3
+knockback_force = 3295.0
 metadata/_custom_type_script = "uid://clpsiijig5hmg"

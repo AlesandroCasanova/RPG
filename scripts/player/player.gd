@@ -46,6 +46,19 @@ var is_dead: bool = false
 
 
 # =========================================================
+# KNOCKBACK RECIBIDO
+# =========================================================
+
+@export_range(0.0, 1.0, 0.05)
+var knockback_resistance: float = 0.0
+
+@export_range(0.0, 10000.0, 1.0)
+var received_knockback_friction: float = 1600.0
+
+var received_knockback_velocity: Vector2 = Vector2.ZERO
+
+
+# =========================================================
 # ATAQUE NORMAL
 # =========================================================
 
@@ -101,6 +114,12 @@ var is_dead: bool = false
 # =========================================================
 
 @export var charge_move_multiplier: float = 0.55
+
+# Solo un knockback EFECTIVO superior a este valor
+# interrumpe una carga pesada/cargada en progreso.
+# El valor efectivo ya tiene en cuenta knockback_resistance.
+@export_range(0.0, 5000.0, 1.0)
+var charged_attack_interrupt_knockback_threshold: float = 150.0
 
 
 # =========================================================
@@ -357,21 +376,42 @@ func _physics_process(delta: float) -> void:
 
 
 	# -----------------------------------------------------
+	# PESADO / CARGADO
+	#
+	# Esto se procesa ANTES del retorno por knockback.
+	# Así, si el golpe recibido es leve y no supera el
+	# umbral de interrupción, una carga que ya estaba en
+	# progreso puede seguir acumulando tiempo.
+	# -----------------------------------------------------
+
+	_update_heavy_attack_input(
+		delta
+	)
+
+
+	# -----------------------------------------------------
+	# KNOCKBACK RECIBIDO
+	#
+	# Mientras el empuje está activo, WASD/dash no pueden
+	# reemplazar inmediatamente esa velocidad.
+	# -----------------------------------------------------
+
+	if received_knockback_velocity != Vector2.ZERO:
+
+		_process_received_knockback(
+			delta
+		)
+
+		return
+
+
+	# -----------------------------------------------------
 	# APUNTADO
 	# -----------------------------------------------------
 
 	if attack_action_time_left <= 0.0:
 
 		_update_aim_from_mouse()
-
-
-	# -----------------------------------------------------
-	# PESADO / CARGADO
-	# -----------------------------------------------------
-
-	_update_heavy_attack_input(
-		delta
-	)
 
 
 	# -----------------------------------------------------
@@ -705,6 +745,14 @@ func _begin_heavy_charge() -> void:
 
 
 	if is_dashing:
+
+		return
+
+
+	# Una carga que ya estaba activa puede continuar durante
+	# un knockback leve, pero no permitimos iniciar una carga
+	# nueva en mitad de un empuje.
+	if received_knockback_velocity != Vector2.ZERO:
 
 		return
 
@@ -2027,7 +2075,9 @@ func _play_walk() -> void:
 # =========================================================
 
 func take_damage(
-	amount: int
+	amount: int,
+	attacker_position: Vector2 = Vector2.ZERO,
+	received_knockback: float = 0.0
 ) -> void:
 
 	if is_dead:
@@ -2062,6 +2112,11 @@ func take_damage(
 	)
 
 	print(
+		"KNOCKBACK RECIBIDO: ",
+		received_knockback
+	)
+
+	print(
 		"=============================="
 	)
 
@@ -2073,7 +2128,170 @@ func take_damage(
 		return
 
 
+	# Un golpe enemigo interrumpe el dash para que el
+	# knockback no sea anulado por su velocidad.
+	if is_dashing:
+
+		is_dashing = false
+
+		dash_time_left = 0.0
+
+		dash_direction = Vector2.ZERO
+
+
+	is_sprinting = false
+
+
+	# -----------------------------------------------------
+	# INTERRUPCIÓN DE CARGA POR KNOCKBACK
+	#
+	# No todo golpe corta una carga.
+	# Solo la corta si el knockback EFECTIVO, luego de aplicar
+	# la resistencia del Player, supera el umbral configurable.
+	# -----------------------------------------------------
+
+	var effective_knockback: float = (
+		_get_effective_received_knockback(
+			received_knockback
+		)
+	)
+
+
+	if (
+		is_charging_heavy
+		and
+		effective_knockback
+		> charged_attack_interrupt_knockback_threshold
+	):
+
+		print(
+			"CARGA INTERRUMPIDA POR KNOCKBACK | Fuerza efectiva: ",
+			effective_knockback,
+			" | Umbral: ",
+			charged_attack_interrupt_knockback_threshold
+		)
+
+		_cancel_heavy_charge()
+
+
+	_apply_received_knockback(
+		attacker_position,
+		received_knockback
+	)
+
+
 	_flash_player_damage()
+
+
+# =========================================================
+# OBTENER KNOCKBACK EFECTIVO
+# =========================================================
+
+func _get_effective_received_knockback(
+	received_knockback: float
+) -> float:
+
+	if received_knockback <= 0.0:
+
+		return 0.0
+
+
+	var resistance: float = clampf(
+		knockback_resistance,
+		0.0,
+		1.0
+	)
+
+
+	return (
+		received_knockback
+		* (
+			1.0
+			- resistance
+		)
+	)
+
+
+# =========================================================
+# APLICAR KNOCKBACK RECIBIDO
+# =========================================================
+
+func _apply_received_knockback(
+	attacker_position: Vector2,
+	received_knockback: float
+) -> void:
+
+	if received_knockback <= 0.0:
+
+		return
+
+
+	var direction: Vector2 = (
+		global_position
+		- attacker_position
+	)
+
+
+	if direction.length_squared() < 0.001:
+
+		direction = Vector2.DOWN
+
+	else:
+
+		direction = direction.normalized()
+
+
+	var final_knockback: float = (
+		_get_effective_received_knockback(
+			received_knockback
+		)
+	)
+
+
+	if final_knockback <= 0.0:
+
+		return
+
+
+	received_knockback_velocity = (
+		direction
+		* final_knockback
+	)
+
+
+# =========================================================
+# PROCESAR KNOCKBACK RECIBIDO
+# =========================================================
+
+func _process_received_knockback(
+	delta: float
+) -> void:
+
+	is_sprinting = false
+
+
+	velocity = (
+		received_knockback_velocity
+	)
+
+
+	move_and_slide()
+
+
+	received_knockback_velocity = (
+		received_knockback_velocity.move_toward(
+			Vector2.ZERO,
+			received_knockback_friction
+			* delta
+		)
+	)
+
+
+	if received_knockback_velocity.length() < 1.0:
+
+		received_knockback_velocity = Vector2.ZERO
+
+		velocity = Vector2.ZERO
 
 
 # =========================================================
@@ -2151,6 +2369,8 @@ func _die() -> void:
 	velocity = Vector2.ZERO
 
 	dash_direction = Vector2.ZERO
+
+	received_knockback_velocity = Vector2.ZERO
 
 
 	attack_action_time_left = 0.0

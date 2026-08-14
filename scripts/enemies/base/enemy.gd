@@ -1923,7 +1923,9 @@ func _attack_player() -> void:
 	):
 
 		player.take_damage(
-			primary_attack.damage
+			primary_attack.damage,
+			global_position,
+			primary_attack.knockback_force
 		)
 
 
