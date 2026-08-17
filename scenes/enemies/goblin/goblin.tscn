@@ -3,7 +3,37 @@
 [ext_resource type="PackedScene" uid="uid://d78ps477kn73" path="res://scenes/enemies/base/enemy_base.tscn" id="1_5wvco"]
 [ext_resource type="Resource" uid="uid://b50jil5mbucoe" path="res://data/enemies/goblin/goblin.tres" id="2_duw8a"]
 [ext_resource type="Resource" uid="uid://513mborvsrne" path="res://data/attacks/goblin/goblin_slash.tres" id="3_gnerw"]
+[ext_resource type="Script" uid="uid://clpsiijig5hmg" path="res://scripts/combat/attack_data.gd" id="4_gnerw"]
 [ext_resource type="Texture2D" uid="uid://b0nxrq12v0jys" path="res://assets/characters/enemies/goblin/sprites/idle/goblien_sheet_cardinal.png" id="4_pcsqt"]
+
+[sub_resource type="Resource" id="Resource_86roj"]
+script = ExtResource("4_gnerw")
+attack_name = "Heavy Slash"
+attack_kind = 1
+windup_time = 0.35
+active_time = 0.1
+recovery_time = 0.45
+charge_time = 0.5
+cooldown = 2.0
+stamina_cost = 25.0
+ai_weight = 0.5
+hitbox_length = 50.0
+hitbox_width = 40.0
+knockback_force = 150.0
+metadata/_custom_type_script = "uid://clpsiijig5hmg"
+
+[sub_resource type="Resource" id="Resource_gbfbk"]
+script = ExtResource("4_gnerw")
+attack_name = "Chraged attack"
+attack_kind = 2
+damage = 20
+active_time = 0.29
+recovery_time = 0.6
+charge_time = 1.07
+stamina_cost = 50.0
+hitbox_length = 70.0
+hitbox_width = 50.0
+metadata/_custom_type_script = "uid://clpsiijig5hmg"
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_cqlnd"]
 atlas = ExtResource("4_pcsqt")
@@ -146,6 +176,8 @@ radius = 14.0
 [node name="Goblin" unique_id=145435098 instance=ExtResource("1_5wvco")]
 enemy_data = ExtResource("2_duw8a")
 primary_attack = ExtResource("3_gnerw")
+heavy_attack = SubResource("Resource_86roj")
+charged_attack = SubResource("Resource_gbfbk")
 debug_combat = true
 
 [node name="EnemyAnimated" parent="." index="0" unique_id=789413155]

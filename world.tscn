@@ -20,16 +20,16 @@ tile_size = Vector2i(128, 64)
 sources/1 = SubResource("TileSetAtlasSource_tlwt5")
 
 [sub_resource type="NavigationPolygon" id="NavigationPolygon_wcd18"]
-vertices = PackedVector2Array(866, 505, 1241.1016, 477, 795, 700.0469, 717.5, 505, 350.71094, 477.89844, 866, 381, 795.03125, 253.96094, 717.5, 381)
-polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2), PackedInt32Array(3, 0, 2), PackedInt32Array(3, 2, 4), PackedInt32Array(1, 0, 5), PackedInt32Array(6, 1, 5), PackedInt32Array(6, 5, 7), PackedInt32Array(4, 6, 7), PackedInt32Array(4, 7, 3)])
-outlines = Array[PackedVector2Array]([PackedVector2Array(795, 226, 295, 478, 795, 728, 1297, 477)])
+vertices = PackedVector2Array(795.09375, 253.9375, 1159.5391, 434.21875, 883.89844, 432.96094, 757.1172, 364.1172, 350.71094, 477.89844, 706.71875, 456.9375, 795, 700.0469, 833.5, 525.78125, 1241.7891, 476.64844)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3), PackedInt32Array(4, 0, 3, 5), PackedInt32Array(6, 4, 5, 7), PackedInt32Array(1, 8, 6, 7, 2)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(795, 226, 295, 478, 795, 728, 1297, 477, 1171, 412)])
 parsed_geometry_type = 1
 source_geometry_mode = 1
 source_geometry_group_name = &"nav_bake"
 agent_radius = 25.0
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wcd18"]
-size = Vector2(98.5, 74)
+size = Vector2(94.26305, 55.61918)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_aqk2v"]
 atlas = ExtResource("3_aqk2v")
@@ -347,7 +347,9 @@ polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 
 [node name="TreeColision" type="StaticBody2D" parent="Environment/TreeTest" unique_id=369145233]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TreeTest/TreeColision" unique_id=172844242]
-position = Vector2(-5.25, -6)
+position = Vector2(-1.6895752, -4.0496826)
+rotation = 0.49741888
+scale = Vector2(0.99999994, 0.99999994)
 shape = SubResource("RectangleShape2D_wcd18")
 
 [node name="TreeNavigationObstacle" type="NavigationObstacle2D" parent="Environment/TreeTest" unique_id=1791644853 groups=["nav_bake"]]

@@ -12,6 +12,10 @@ extends CharacterBody2D
 
 @export var primary_attack: AttackData
 
+@export var heavy_attack: AttackData
+
+@export var charged_attack: AttackData
+
 
 # =========================================================
 # COLISIONES
@@ -66,38 +70,59 @@ var attack_area: Area2D = null
 
 var attack_collision: CollisionShape2D = null
 
-# IMPORTANTE:
-# Esta shape será propia de cada instancia del enemigo.
 var attack_hitbox_shape: RectangleShape2D = null
 
 
 # =========================================================
-# ESTADO
+# ESTADO GENERAL
 # =========================================================
 
 var last_facing: String = "s"
 
-# Fallback cardinal para mantener el comportamiento visual actual
-# hasta que existan las animaciones diagonales.
 var last_cardinal_facing: String = "s"
 
 var health: int = 0
 
 var player: CharacterBody2D = null
 
-var attack_cooldown_left: float = 0.0
-
-var knockback_velocity: Vector2 = Vector2.ZERO
-
-# Tiempo durante el cual el enemigo queda recuperándose
-# DESPUÉS de terminar un knockback suficientemente fuerte.
-var stagger_recovery_time_left: float = 0.0
-
 var wants_navigation_movement: bool = false
 
 
 # =========================================================
-# DEBUG ESTADO
+# STAMINA
+# =========================================================
+
+var stamina: float = 0.0
+
+var stamina_regen_delay_left: float = 0.0
+
+
+# =========================================================
+# ATAQUE
+# =========================================================
+
+var attack_cooldown_left: float = 0.0
+
+var current_attack: AttackData = null
+
+var current_attack_phase: String = ""
+
+var current_attack_phase_time_left: float = 0.0
+
+var locked_attack_direction: Vector2 = Vector2.DOWN
+
+
+# =========================================================
+# KNOCKBACK / STAGGER
+# =========================================================
+
+var knockback_velocity: Vector2 = Vector2.ZERO
+
+var stagger_recovery_time_left: float = 0.0
+
+
+# =========================================================
+# DEBUG
 # =========================================================
 
 var debug_combat_position: Vector2 = Vector2.ZERO
@@ -115,10 +140,6 @@ var debug_distance_to_player: float = 0.0
 
 func _ready() -> void:
 
-	# -----------------------------------------------------
-	# VALIDAR ESCENA BASE
-	# -----------------------------------------------------
-
 	if not _validate_required_nodes():
 
 		set_physics_process(false)
@@ -126,16 +147,8 @@ func _ready() -> void:
 		return
 
 
-	# -----------------------------------------------------
-	# RESOURCES
-	# -----------------------------------------------------
-
 	_ensure_resources()
 
-
-	# -----------------------------------------------------
-	# VIDA
-	# -----------------------------------------------------
 
 	health = maxi(
 		enemy_data.max_health,
@@ -143,18 +156,16 @@ func _ready() -> void:
 	)
 
 
-	# -----------------------------------------------------
-	# GRUPO
-	# -----------------------------------------------------
+	stamina = maxf(
+		enemy_data.max_stamina,
+		1.0
+	)
+
 
 	add_to_group(
 		"enemies"
 	)
 
-
-	# -----------------------------------------------------
-	# COLISIONES DEL CUERPO
-	# -----------------------------------------------------
 
 	collision_layer = (
 		body_collision_layer
@@ -165,37 +176,13 @@ func _ready() -> void:
 	)
 
 
-	# -----------------------------------------------------
-	# BARRA DE VIDA
-	# -----------------------------------------------------
-
 	_update_health_bar()
-
-
-	# -----------------------------------------------------
-	# PLAYER
-	# -----------------------------------------------------
 
 	_find_player()
 
-
-	# -----------------------------------------------------
-	# ATTACK AREA
-	# -----------------------------------------------------
-
 	_setup_attack_area()
 
-
-	# -----------------------------------------------------
-	# AVOIDANCE
-	# -----------------------------------------------------
-
 	_setup_navigation_avoidance()
-
-
-	# -----------------------------------------------------
-	# ANIMACIÓN
-	# -----------------------------------------------------
 
 	_play_idle()
 
@@ -204,12 +191,14 @@ func _ready() -> void:
 		"ENEMIGO CREADO | ",
 		enemy_data.enemy_name,
 		" | HP: ",
-		health
+		health,
+		" | Stamina interna: ",
+		stamina
 	)
 
 
 # =========================================================
-# VALIDAR NODOS NECESARIOS
+# VALIDAR NODOS
 # =========================================================
 
 func _validate_required_nodes() -> bool:
@@ -221,7 +210,7 @@ func _validate_required_nodes() -> bool:
 
 		push_error(
 			name
-			+ ": falta EnemyAnimated (AnimatedSprite2D)."
+			+ ": falta EnemyAnimated."
 		)
 
 		valid = false
@@ -231,7 +220,7 @@ func _validate_required_nodes() -> bool:
 
 		push_error(
 			name
-			+ ": falta HealthBar (ProgressBar)."
+			+ ": falta HealthBar."
 		)
 
 		valid = false
@@ -251,7 +240,7 @@ func _validate_required_nodes() -> bool:
 
 
 # =========================================================
-# ASEGURAR RESOURCES
+# RECURSOS
 # =========================================================
 
 func _ensure_resources() -> void:
@@ -260,8 +249,7 @@ func _ensure_resources() -> void:
 
 		push_warning(
 			name
-			+ " no tiene EnemyData asignado. "
-			+ "Se utilizarán valores por defecto."
+			+ " no tiene EnemyData. Se usarán valores por defecto."
 		)
 
 		enemy_data = EnemyData.new()
@@ -271,15 +259,15 @@ func _ensure_resources() -> void:
 
 		push_warning(
 			enemy_data.enemy_name
-			+ " no tiene AttackData asignado. "
-			+ "Se utilizarán valores por defecto."
+			+ " no tiene Primary Attack. "
+			+ "Se utilizará uno por defecto."
 		)
 
 		primary_attack = AttackData.new()
 
 
 # =========================================================
-# ACTUALIZAR BARRA DE VIDA
+# BARRA DE VIDA
 # =========================================================
 
 func _update_health_bar() -> void:
@@ -289,7 +277,7 @@ func _update_health_bar() -> void:
 		return
 
 
-	var max_health: int = maxi(
+	var maximum_health: int = maxi(
 		enemy_data.max_health,
 		1
 	)
@@ -297,58 +285,44 @@ func _update_health_bar() -> void:
 
 	health_bar.min_value = 0
 
-	health_bar.max_value = (
-		max_health
-	)
+	health_bar.max_value = maximum_health
 
-	health_bar.value = (
-		health
-	)
+	health_bar.value = health
 
 	health_bar.show_percentage = false
 
 
-	# -----------------------------------------------------
-	# VISIBILIDAD AUTOMÁTICA
-	#
-	# VIDA COMPLETA:
-	# Oculta.
-	#
-	# ENEMIGO HERIDO:
-	# Visible.
-	#
-	# ENEMIGO MUERTO:
-	# Oculta.
-	# -----------------------------------------------------
-
 	health_bar.visible = (
 		health > 0
-		and health < max_health
+		and
+		health < maximum_health
 	)
 
 
 # =========================================================
-# BUSCAR PLAYER
+# PLAYER
 # =========================================================
 
 func _find_player() -> void:
 
-	player = get_tree().get_first_node_in_group(
-		"player"
-	) as CharacterBody2D
+	player = (
+		get_tree().get_first_node_in_group(
+			"player"
+		)
+		as CharacterBody2D
+	)
 
 
 	if player == null:
 
 		push_warning(
 			enemy_data.enemy_name
-			+ ": no se encontró un CharacterBody2D "
-			+ "en el grupo player."
+			+ ": no se encontró Player."
 		)
 
 
 # =========================================================
-# CONFIGURAR AVOIDANCE
+# AVOIDANCE
 # =========================================================
 
 func _setup_navigation_avoidance() -> void:
@@ -376,6 +350,7 @@ func _setup_navigation_avoidance() -> void:
 	)
 
 	navigation_agent.avoidance_layers = 1
+
 	navigation_agent.avoidance_mask = 1
 
 
@@ -389,14 +364,10 @@ func _setup_navigation_avoidance() -> void:
 
 
 # =========================================================
-# CONFIGURAR ATTACK AREA
+# ATTACK AREA
 # =========================================================
 
 func _setup_attack_area() -> void:
-
-	# -----------------------------------------------------
-	# ATTACK AREA
-	# -----------------------------------------------------
 
 	var existing_area: Node = (
 		get_node_or_null(
@@ -408,36 +379,29 @@ func _setup_attack_area() -> void:
 	if existing_area is Area2D:
 
 		attack_area = (
-			existing_area as Area2D
+			existing_area
+			as Area2D
 		)
 
 	else:
 
-		attack_area = (
-			Area2D.new()
-		)
+		attack_area = Area2D.new()
 
-		attack_area.name = (
-			"AttackArea"
-		)
+		attack_area.name = "AttackArea"
 
 		add_child(
 			attack_area
 		)
 
 
-	# No usamos las señales de overlap del Area2D.
-	# La comprobación real se hace con intersect_shape().
 	attack_area.collision_layer = 0
+
 	attack_area.collision_mask = 0
 
 	attack_area.monitoring = false
+
 	attack_area.monitorable = false
 
-
-	# -----------------------------------------------------
-	# ATTACK COLLISION
-	# -----------------------------------------------------
 
 	var existing_collision: Node = (
 		attack_area.get_node_or_null(
@@ -446,7 +410,6 @@ func _setup_attack_area() -> void:
 	)
 
 
-	# Compatibilidad temporal con escenas anteriores.
 	if existing_collision == null:
 
 		existing_collision = (
@@ -469,34 +432,22 @@ func _setup_attack_area() -> void:
 			CollisionShape2D.new()
 		)
 
-		attack_collision.name = (
-			"AttackCollision"
-		)
+		attack_collision.name = "AttackCollision"
 
 		attack_area.add_child(
 			attack_collision
 		)
 
 
-	attack_collision.position = (
-		Vector2.ZERO
-	)
+	attack_collision.position = Vector2.ZERO
 
 	attack_collision.rotation = 0.0
 
 
-	# =====================================================
-	# SHAPE ÚNICA PARA ESTA INSTANCIA
-	# =====================================================
-
 	if attack_collision.shape is RectangleShape2D:
 
-		var duplicated_shape: Resource = (
-			attack_collision.shape.duplicate()
-		)
-
 		attack_hitbox_shape = (
-			duplicated_shape
+			attack_collision.shape.duplicate()
 			as RectangleShape2D
 		)
 
@@ -512,28 +463,26 @@ func _setup_attack_area() -> void:
 	)
 
 
-	_update_attack_hitbox()
+	_update_attack_hitbox(
+		primary_attack
+	)
 
 
 # =========================================================
-# PHYSICS PROCESS
+# PHYSICS
 # =========================================================
 
 func _physics_process(
 	delta: float
 ) -> void:
 
-	# =====================================================
-	# COOLDOWN
-	# =====================================================
+	_update_attack_cooldown(
+		delta
+	)
 
-	if attack_cooldown_left > 0.0:
-
-		attack_cooldown_left -= delta
-
-		if attack_cooldown_left < 0.0:
-
-			attack_cooldown_left = 0.0
+	_update_stamina(
+		delta
+	)
 
 
 	# =====================================================
@@ -550,15 +499,25 @@ func _physics_process(
 
 
 	# =====================================================
-	# RECUPERACIÓN / STAGGER
-	#
-	# Un knockback fuerte puede dejar al enemigo unos
-	# instantes sin moverse ni atacar después del empuje.
+	# STAGGER
 	# =====================================================
 
 	if stagger_recovery_time_left > 0.0:
 
 		_process_stagger_recovery(
+			delta
+		)
+
+		return
+
+
+	# =====================================================
+	# ATAQUE EN PROGRESO
+	# =====================================================
+
+	if current_attack != null:
+
+		_process_current_attack(
 			delta
 		)
 
@@ -585,10 +544,6 @@ func _physics_process(
 			return
 
 
-	# =====================================================
-	# PLAYER MUERTO
-	# =====================================================
-
 	if player.has_method(
 		"is_alive"
 	):
@@ -601,7 +556,7 @@ func _physics_process(
 
 
 	# =====================================================
-	# DISTANCIA DE DETECCIÓN
+	# DETECCIÓN
 	# =====================================================
 
 	debug_distance_to_player = (
@@ -629,7 +584,7 @@ func _physics_process(
 
 
 	# =====================================================
-	# INFORMACIÓN DEL COMBATE
+	# COMBATE GRUPAL
 	# =====================================================
 
 	var combat_info: Dictionary = (
@@ -657,18 +612,21 @@ func _physics_process(
 
 
 	# =====================================================
-	# ATACANTE ACTIVO
+	# ATACANTE
 	# =====================================================
 
 	if can_attack:
 
 		_face_player()
 
-		_update_attack_hitbox()
+
+		var reachable_attacks: Array[AttackData] = (
+			_get_reachable_attacks()
+		)
 
 
 		debug_hitbox_reaches_player = (
-			_attack_hitbox_reaches_player()
+			not reachable_attacks.is_empty()
 		)
 
 
@@ -678,24 +636,35 @@ func _physics_process(
 
 
 		# -------------------------------------------------
-		# PLAYER DENTRO DE LA HITBOX
+		# PUEDE ALCANZAR AL PLAYER
 		# -------------------------------------------------
 
-		if debug_hitbox_reaches_player:
+		if not reachable_attacks.is_empty():
 
 			_stop_navigation()
 
 
 			if attack_cooldown_left <= 0.0:
 
-				_attack_player()
+				var selected_attack: AttackData = (
+					_choose_attack(
+						reachable_attacks
+					)
+				)
+
+
+				if selected_attack != null:
+
+					_start_attack(
+						selected_attack
+					)
 
 
 			return
 
 
 		# -------------------------------------------------
-		# TODAVÍA NO LLEGA
+		# TODAVÍA NO ALCANZA
 		# -------------------------------------------------
 
 		_move_toward_position(
@@ -706,7 +675,7 @@ func _physics_process(
 
 
 	# =====================================================
-	# ESPERANDO TURNO
+	# ESPERA
 	# =====================================================
 
 	debug_hitbox_reaches_player = false
@@ -719,6 +688,711 @@ func _physics_process(
 
 	_move_toward_position(
 		combat_position
+	)
+
+
+# =========================================================
+# COOLDOWN
+# =========================================================
+
+func _update_attack_cooldown(
+	delta: float
+) -> void:
+
+	if attack_cooldown_left <= 0.0:
+
+		return
+
+
+	attack_cooldown_left = maxf(
+		attack_cooldown_left
+		- delta,
+		0.0
+	)
+
+
+# =========================================================
+# STAMINA
+# =========================================================
+
+func _update_stamina(
+	delta: float
+) -> void:
+
+	if not enemy_data.uses_stamina:
+
+		stamina = (
+			enemy_data.max_stamina
+		)
+
+		return
+
+
+	if stamina_regen_delay_left > 0.0:
+
+		stamina_regen_delay_left = maxf(
+			stamina_regen_delay_left
+			- delta,
+			0.0
+		)
+
+		return
+
+
+	# No regenera mientras está ejecutando un ataque.
+	if current_attack != null:
+
+		return
+
+
+	if stamina >= enemy_data.max_stamina:
+
+		stamina = enemy_data.max_stamina
+
+		return
+
+
+	stamina = minf(
+		enemy_data.max_stamina,
+		stamina
+		+ enemy_data.stamina_regen_rate
+		* delta
+	)
+
+
+# =========================================================
+# ¿PUEDE PAGAR EL ATAQUE?
+# =========================================================
+
+func _can_afford_attack(
+	attack: AttackData
+) -> bool:
+
+	if attack == null:
+
+		return false
+
+
+	if not enemy_data.uses_stamina:
+
+		return true
+
+
+	return (
+		stamina
+		>= attack.stamina_cost
+	)
+
+
+# =========================================================
+# GASTAR STAMINA
+# =========================================================
+
+func _spend_attack_stamina(
+	attack: AttackData
+) -> bool:
+
+	if attack == null:
+
+		return false
+
+
+	if not enemy_data.uses_stamina:
+
+		return true
+
+
+	if stamina < attack.stamina_cost:
+
+		return false
+
+
+	stamina = maxf(
+		stamina
+		- attack.stamina_cost,
+		0.0
+	)
+
+
+	stamina_regen_delay_left = (
+		enemy_data.stamina_regen_delay
+	)
+
+
+	return true
+
+
+# =========================================================
+# ATAQUES DISPONIBLES
+# =========================================================
+
+func _get_available_attacks() -> Array[AttackData]:
+
+	var attacks: Array[AttackData] = []
+
+
+	# -----------------------------------------------------
+	# PRIMARY
+	# -----------------------------------------------------
+
+	if (
+		primary_attack != null
+		and
+		_can_afford_attack(
+			primary_attack
+		)
+	):
+
+		attacks.append(
+			primary_attack
+		)
+
+
+	# -----------------------------------------------------
+	# HEAVY
+	# -----------------------------------------------------
+
+	if (
+		enemy_data.can_use_heavy_attacks
+		and
+		heavy_attack != null
+		and
+		_can_afford_attack(
+			heavy_attack
+		)
+	):
+
+		attacks.append(
+			heavy_attack
+		)
+
+
+	# -----------------------------------------------------
+	# CHARGED
+	# -----------------------------------------------------
+
+	if (
+		enemy_data.can_use_charged_attacks
+		and
+		charged_attack != null
+		and
+		_can_afford_attack(
+			charged_attack
+		)
+	):
+
+		attacks.append(
+			charged_attack
+		)
+
+
+	return attacks
+
+
+# =========================================================
+# ATAQUES QUE ALCANZAN
+# =========================================================
+
+func _get_reachable_attacks() -> Array[AttackData]:
+
+	var reachable: Array[AttackData] = []
+
+
+	var attacks: Array[AttackData] = (
+		_get_available_attacks()
+	)
+
+
+	var direction: Vector2 = (
+		_get_attack_direction()
+	)
+
+
+	for attack: AttackData in attacks:
+
+		if _attack_hitbox_reaches_player(
+			attack,
+			direction
+		):
+
+			reachable.append(
+				attack
+			)
+
+
+	return reachable
+
+
+# =========================================================
+# ELEGIR ATAQUE
+# =========================================================
+
+func _choose_attack(
+	candidates: Array[AttackData]
+) -> AttackData:
+
+	if candidates.is_empty():
+
+		return null
+
+
+	if candidates.size() == 1:
+
+		return candidates[0]
+
+
+	var total_weight: float = 0.0
+
+
+	for attack: AttackData in candidates:
+
+		total_weight += maxf(
+			attack.ai_weight,
+			0.0
+		)
+
+
+	if total_weight <= 0.0:
+
+		return candidates[0]
+
+
+	var roll: float = (
+		randf()
+		* total_weight
+	)
+
+
+	for attack: AttackData in candidates:
+
+		roll -= maxf(
+			attack.ai_weight,
+			0.0
+		)
+
+
+		if roll <= 0.0:
+
+			return attack
+
+
+	return candidates[
+		candidates.size() - 1
+	]
+
+
+# =========================================================
+# COMENZAR ATAQUE
+# =========================================================
+
+func _start_attack(
+	attack: AttackData
+) -> void:
+
+	if attack == null:
+
+		return
+
+
+	if current_attack != null:
+
+		return
+
+
+	if attack_cooldown_left > 0.0:
+
+		return
+
+
+	if not _spend_attack_stamina(
+		attack
+	):
+
+		return
+
+
+	current_attack = attack
+
+
+	locked_attack_direction = (
+		_get_attack_direction()
+	)
+
+
+	if locked_attack_direction == Vector2.ZERO:
+
+		locked_attack_direction = (
+			Vector2.DOWN
+		)
+
+
+	_update_facing(
+		locked_attack_direction
+	)
+
+
+	_stop_navigation()
+
+
+	attack_cooldown_left = maxf(
+		attack.cooldown,
+		0.0
+	)
+
+
+	# -----------------------------------------------------
+	# CARGA EXTRA
+	# -----------------------------------------------------
+
+	var additional_charge_time: float = 0.0
+
+
+	if (
+		attack.attack_kind
+		==
+		AttackData.AttackKind.CHARGED
+	):
+
+		additional_charge_time = maxf(
+			attack.charge_time,
+			0.0
+		)
+
+
+	current_attack_phase = "windup"
+
+
+	current_attack_phase_time_left = maxf(
+		attack.windup_time
+		+ additional_charge_time,
+		0.0
+	)
+
+
+	_apply_attack_telegraph_visual(
+		attack
+	)
+
+
+	if debug_combat:
+
+		print(
+			enemy_data.enemy_name,
+			" PREPARA ",
+			attack.attack_name,
+			" | Stamina: ",
+			stamina,
+			" / ",
+			enemy_data.max_stamina
+		)
+
+
+	if current_attack_phase_time_left <= 0.0:
+
+		_enter_attack_active_phase()
+
+
+# =========================================================
+# PROCESAR ATAQUE
+# =========================================================
+
+func _process_current_attack(
+	delta: float
+) -> void:
+
+	if current_attack == null:
+
+		return
+
+
+	_stop_navigation()
+
+
+	current_attack_phase_time_left = maxf(
+		current_attack_phase_time_left
+		- delta,
+		0.0
+	)
+
+
+	if current_attack_phase_time_left > 0.0:
+
+		return
+
+
+	match current_attack_phase:
+
+		"windup":
+
+			_enter_attack_active_phase()
+
+
+		"active":
+
+			_enter_attack_recovery_phase()
+
+
+		"recovery":
+
+			_finish_current_attack()
+
+
+# =========================================================
+# FASE ACTIVA
+# =========================================================
+
+func _enter_attack_active_phase() -> void:
+
+	if current_attack == null:
+
+		return
+
+
+	current_attack_phase = "active"
+
+
+	current_attack_phase_time_left = maxf(
+		current_attack.active_time,
+		0.0
+	)
+
+
+	_update_attack_hitbox(
+		current_attack,
+		locked_attack_direction
+	)
+
+
+	_resolve_current_attack_hit()
+
+
+	_attack_flash()
+
+
+	if current_attack_phase_time_left <= 0.0:
+
+		_enter_attack_recovery_phase()
+
+
+# =========================================================
+# RESOLVER IMPACTO
+# =========================================================
+
+func _resolve_current_attack_hit() -> void:
+
+	if current_attack == null:
+
+		return
+
+
+	if not is_instance_valid(
+		player
+	):
+
+		return
+
+
+	if player.has_method(
+		"is_alive"
+	):
+
+		if not player.is_alive():
+
+			return
+
+
+	# Muy importante:
+	# el enemigo NO golpea automáticamente solo porque
+	# comenzó el ataque dentro del rango.
+	#
+	# Se comprueba otra vez cuando llega el momento real
+	# del impacto.
+	#
+	# Por lo tanto el jugador puede esquivarlo.
+	if not _attack_hitbox_reaches_player(
+		current_attack,
+		locked_attack_direction
+	):
+
+		if debug_combat:
+
+			print(
+				enemy_data.enemy_name,
+				" FALLA ",
+				current_attack.attack_name
+			)
+
+
+		return
+
+
+	print(
+		"=============================="
+	)
+
+	print(
+		enemy_data.enemy_name,
+		" USA ",
+		current_attack.attack_name
+	)
+
+	print(
+		"DAÑO: ",
+		current_attack.damage,
+		" | KNOCKBACK: ",
+		current_attack.knockback_force
+	)
+
+	print(
+		"=============================="
+	)
+
+
+	if player.has_method(
+		"take_damage"
+	):
+
+		player.take_damage(
+			current_attack.damage,
+			global_position,
+			current_attack.knockback_force
+		)
+
+
+# =========================================================
+# RECOVERY
+# =========================================================
+
+func _enter_attack_recovery_phase() -> void:
+
+	if current_attack == null:
+
+		return
+
+
+	current_attack_phase = "recovery"
+
+
+	current_attack_phase_time_left = maxf(
+		current_attack.recovery_time,
+		0.0
+	)
+
+
+	_reset_attack_telegraph_visual()
+
+
+	if current_attack_phase_time_left <= 0.0:
+
+		_finish_current_attack()
+
+
+# =========================================================
+# FINALIZAR ATAQUE
+# =========================================================
+
+func _finish_current_attack() -> void:
+
+	_reset_attack_telegraph_visual()
+
+
+	current_attack = null
+
+	current_attack_phase = ""
+
+	current_attack_phase_time_left = 0.0
+
+
+	if debug_combat:
+
+		queue_redraw()
+
+
+# =========================================================
+# CANCELAR ATAQUE
+# =========================================================
+
+func _cancel_current_attack() -> void:
+
+	if current_attack == null:
+
+		return
+
+
+	if debug_combat:
+
+		print(
+			enemy_data.enemy_name,
+			" | ATAQUE CANCELADO: ",
+			current_attack.attack_name
+		)
+
+
+	_reset_attack_telegraph_visual()
+
+
+	current_attack = null
+
+	current_attack_phase = ""
+
+	current_attack_phase_time_left = 0.0
+
+
+# =========================================================
+# TELEGRAPH VISUAL PROVISORIO
+# =========================================================
+
+func _apply_attack_telegraph_visual(
+	attack: AttackData
+) -> void:
+
+	if enemy_animated == null:
+
+		return
+
+
+	match attack.attack_kind:
+
+		AttackData.AttackKind.HEAVY:
+
+			enemy_animated.self_modulate = Color(
+				1.0,
+				0.75,
+				0.35,
+				1.0
+			)
+
+
+		AttackData.AttackKind.CHARGED:
+
+			enemy_animated.self_modulate = Color(
+				1.0,
+				0.40,
+				0.15,
+				1.0
+			)
+
+
+		_:
+
+			enemy_animated.self_modulate = (
+				Color.WHITE
+			)
+
+
+# =========================================================
+# RESET TELEGRAPH
+# =========================================================
+
+func _reset_attack_telegraph_visual() -> void:
+
+	if enemy_animated == null:
+
+		return
+
+
+	enemy_animated.self_modulate = (
+		Color.WHITE
 	)
 
 
@@ -756,9 +1430,7 @@ func _process_knockback(
 
 	if knockback_velocity.length() < 1.0:
 
-		knockback_velocity = (
-			Vector2.ZERO
-		)
+		knockback_velocity = Vector2.ZERO
 
 
 	if debug_combat:
@@ -767,7 +1439,7 @@ func _process_knockback(
 
 
 # =========================================================
-# RECUPERACIÓN DESPUÉS DE KNOCKBACK FUERTE
+# STAGGER
 # =========================================================
 
 func _process_stagger_recovery(
@@ -791,6 +1463,7 @@ func _process_stagger_recovery(
 
 
 	debug_can_attack = false
+
 	debug_hitbox_reaches_player = false
 
 
@@ -800,18 +1473,12 @@ func _process_stagger_recovery(
 
 
 # =========================================================
-# CALCULAR DURACIÓN DE RECUPERACIÓN
+# DURACIÓN STAGGER
 # =========================================================
 
 func _calculate_stagger_recovery_duration(
 	effective_knockback: float
 ) -> float:
-
-	# -----------------------------------------------------
-	# UMBRAL
-	#
-	# Debe SUPERAR el umbral para provocar stagger.
-	# -----------------------------------------------------
 
 	var threshold: float = maxf(
 		enemy_data.stagger_threshold,
@@ -824,10 +1491,6 @@ func _calculate_stagger_recovery_duration(
 		return 0.0
 
 
-	# -----------------------------------------------------
-	# DURACIONES
-	# -----------------------------------------------------
-
 	var min_duration: float = maxf(
 		enemy_data.stagger_min_duration,
 		0.0
@@ -839,10 +1502,6 @@ func _calculate_stagger_recovery_duration(
 		min_duration
 	)
 
-
-	# -----------------------------------------------------
-	# FUERZA QUE YA PRODUCE LA DURACIÓN MÁXIMA
-	# -----------------------------------------------------
 
 	var force_for_max: float = maxf(
 		enemy_data.stagger_force_for_max_duration,
@@ -873,7 +1532,7 @@ func _calculate_stagger_recovery_duration(
 
 
 # =========================================================
-# OBTENER KNOCKBACK EFECTIVO
+# KNOCKBACK EFECTIVO
 # =========================================================
 
 func _get_effective_knockback(
@@ -885,8 +1544,6 @@ func _get_effective_knockback(
 	)
 
 
-	# Si el ataque/habilidad especifica una fuerza,
-	# usamos esa en vez del valor fallback del enemigo.
 	if received_knockback >= 0.0:
 
 		base_knockback = (
@@ -912,10 +1569,13 @@ func _get_effective_knockback(
 
 
 # =========================================================
-# ACTUALIZAR HITBOX
+# HITBOX
 # =========================================================
 
-func _update_attack_hitbox() -> void:
+func _update_attack_hitbox(
+	attack: AttackData = null,
+	direction: Vector2 = Vector2.ZERO
+) -> void:
 
 	if attack_area == null:
 
@@ -927,33 +1587,43 @@ func _update_attack_hitbox() -> void:
 		return
 
 
-	if primary_attack == null:
+	if attack == null:
+
+		attack = primary_attack
+
+
+	if attack == null:
 
 		return
 
 
 	var desired_size: Vector2 = Vector2(
 		maxf(
-			primary_attack.hitbox_length,
+			attack.hitbox_length,
 			1.0
 		),
 		maxf(
-			primary_attack.hitbox_width,
+			attack.hitbox_width,
 			1.0
 		)
 	)
 
 
-	if attack_hitbox_shape.size != desired_size:
-
-		attack_hitbox_shape.size = (
-			desired_size
-		)
+	attack_hitbox_shape.size = (
+		desired_size
+	)
 
 
 	var attack_direction: Vector2 = (
-		_get_attack_direction()
+		direction
 	)
+
+
+	if attack_direction == Vector2.ZERO:
+
+		attack_direction = (
+			_get_attack_direction()
+		)
 
 
 	if attack_direction == Vector2.ZERO:
@@ -963,9 +1633,14 @@ func _update_attack_hitbox() -> void:
 		)
 
 
+	attack_direction = (
+		attack_direction.normalized()
+	)
+
+
 	var center_distance: float = (
-		primary_attack.hitbox_start_offset
-		+ primary_attack.hitbox_length
+		attack.hitbox_start_offset
+		+ attack.hitbox_length
 		* 0.5
 	)
 
@@ -1004,50 +1679,39 @@ func _get_attack_direction() -> Vector2:
 			)
 
 
-	# Fallback solamente si no podemos calcular la dirección real
-	# hacia el player. La hitbox continúa apuntando en 360° cuando
-	# el player es válido.
 	match last_facing:
 
 		"n":
-
 			return Vector2.UP
 
 		"ne":
-
 			return Vector2(
 				1.0,
 				-1.0
 			).normalized()
 
 		"e":
-
 			return Vector2.RIGHT
 
 		"se":
-
 			return Vector2(
 				1.0,
 				1.0
 			).normalized()
 
 		"s":
-
 			return Vector2.DOWN
 
 		"sw":
-
 			return Vector2(
 				-1.0,
 				1.0
 			).normalized()
 
 		"w":
-
 			return Vector2.LEFT
 
 		"nw":
-
 			return Vector2(
 				-1.0,
 				-1.0
@@ -1058,10 +1722,18 @@ func _get_attack_direction() -> Vector2:
 
 
 # =========================================================
-# ¿HITBOX TOCA AL PLAYER?
+# ¿ATAQUE ALCANZA PLAYER?
 # =========================================================
 
-func _attack_hitbox_reaches_player() -> bool:
+func _attack_hitbox_reaches_player(
+	attack: AttackData,
+	direction: Vector2 = Vector2.ZERO
+) -> bool:
+
+	if attack == null:
+
+		return false
+
 
 	if not is_instance_valid(
 		player
@@ -1078,6 +1750,12 @@ func _attack_hitbox_reaches_player() -> bool:
 	if attack_hitbox_shape == null:
 
 		return false
+
+
+	_update_attack_hitbox(
+		attack,
+		direction
+	)
 
 
 	var query: PhysicsShapeQueryParameters2D = (
@@ -1098,6 +1776,7 @@ func _attack_hitbox_reaches_player() -> bool:
 	)
 
 	query.collide_with_bodies = true
+
 	query.collide_with_areas = true
 
 	query.exclude = [
@@ -1226,7 +1905,6 @@ func _update_facing(
 		return
 
 
-	# Dirección visual de 8 vías.
 	last_facing = (
 		_direction_to_8_way_facing(
 			direction
@@ -1234,9 +1912,6 @@ func _update_facing(
 	)
 
 
-	# Guardamos además la cardinal que habría usado el sistema
-	# anterior. Mientras falten sprites diagonales, _play_idle()
-	# usa exactamente este fallback.
 	last_cardinal_facing = (
 		_direction_to_cardinal_facing(
 			direction
@@ -1248,7 +1923,7 @@ func _update_facing(
 
 
 # =========================================================
-# CONVERTIR VECTOR A 8 DIRECCIONES
+# 8 DIRECCIONES
 # =========================================================
 
 func _direction_to_8_way_facing(
@@ -1260,58 +1935,35 @@ func _direction_to_8_way_facing(
 		return last_facing
 
 
-	var angle_degrees: float = rad_to_deg(
-		direction.angle()
+	var angle_degrees: float = (
+		rad_to_deg(
+			direction.angle()
+		)
 	)
 
 
-	# Godot 2D:
-	# E =   0°
-	# SE = 45°
-	# S =  90°
-	# SW = 135°
-	# W = ±180°
-	# NW = -135°
-	# N =  -90°
-	# NE = -45°
-
 	if angle_degrees >= -22.5 and angle_degrees < 22.5:
-
 		return "e"
 
-
 	if angle_degrees >= 22.5 and angle_degrees < 67.5:
-
 		return "se"
 
-
 	if angle_degrees >= 67.5 and angle_degrees < 112.5:
-
 		return "s"
 
-
 	if angle_degrees >= 112.5 and angle_degrees < 157.5:
-
 		return "sw"
 
-
 	if angle_degrees >= 157.5 or angle_degrees < -157.5:
-
 		return "w"
 
-
 	if angle_degrees >= -157.5 and angle_degrees < -112.5:
-
 		return "nw"
 
-
 	if angle_degrees >= -112.5 and angle_degrees < -67.5:
-
 		return "n"
 
-
 	if angle_degrees >= -67.5 and angle_degrees < -22.5:
-
 		return "ne"
 
 
@@ -1319,7 +1971,7 @@ func _direction_to_8_way_facing(
 
 
 # =========================================================
-# FALLBACK CARDINAL ORIGINAL
+# CARDINAL
 # =========================================================
 
 func _direction_to_cardinal_facing(
@@ -1338,26 +1990,20 @@ func _direction_to_cardinal_facing(
 	):
 
 		if direction.x > 0.0:
-
 			return "e"
 
-		else:
+		return "w"
 
-			return "w"
 
-	else:
+	if direction.y > 0.0:
+		return "s"
 
-		if direction.y > 0.0:
 
-			return "s"
-
-		else:
-
-			return "n"
+	return "n"
 
 
 # =========================================================
-# MIRAR AL PLAYER
+# MIRAR PLAYER
 # =========================================================
 
 func _face_player() -> void:
@@ -1386,7 +2032,7 @@ func _face_player() -> void:
 
 
 # =========================================================
-# ANIMACIÓN
+# IDLE
 # =========================================================
 
 func _play_idle() -> void:
@@ -1400,10 +2046,6 @@ func _play_idle() -> void:
 
 		return
 
-
-	# -----------------------------------------------------
-	# 1) INTENTAR LA DIRECCIÓN REAL DE 8 VÍAS
-	# -----------------------------------------------------
 
 	var animation_name: String = (
 		"idle_"
@@ -1424,14 +2066,6 @@ func _play_idle() -> void:
 
 		return
 
-
-	# -----------------------------------------------------
-	# 2) FALLBACK CARDINAL
-	#
-	# Mientras no tengamos idle_ne / idle_se / idle_sw /
-	# idle_nw, conserva el comportamiento visual que ya
-	# teníamos antes de habilitar las 8 direcciones.
-	# -----------------------------------------------------
 
 	var fallback_animation_name: String = (
 		"idle_"
@@ -1454,7 +2088,7 @@ func _play_idle() -> void:
 
 
 # =========================================================
-# INFORMACIÓN DE COMBATE
+# COMBATE GRUPAL
 # =========================================================
 
 func _get_combat_info() -> Dictionary:
@@ -1503,10 +2137,6 @@ func _get_combat_info() -> Dictionary:
 	)
 
 
-	# =====================================================
-	# ATACANTE
-	# =====================================================
-
 	if my_index < attacker_count:
 
 		var attackers: Array[Node] = []
@@ -1552,13 +2182,8 @@ func _get_combat_info() -> Dictionary:
 
 		result["can_attack"] = true
 
-
 		return result
 
-
-	# =====================================================
-	# EN ESPERA
-	# =====================================================
 
 	var waiting_enemies: Array[Node] = []
 
@@ -1622,7 +2247,7 @@ func _get_combat_info() -> Dictionary:
 
 
 # =========================================================
-# ASIGNACIÓN DINÁMICA DE SLOTS
+# SLOTS
 # =========================================================
 
 func _build_slot_assignments(
@@ -1712,10 +2337,7 @@ func _build_slot_assignments(
 			available_slots[0]
 		)
 
-
-		var best_score: float = (
-			-INF
-		)
+		var best_score: float = -INF
 
 
 		for slot_index: int in available_slots:
@@ -1748,24 +2370,20 @@ func _build_slot_assignments(
 
 			if score > best_score:
 
-				best_score = (
-					score
-				)
+				best_score = score
 
-				best_slot = (
-					slot_index
-				)
+				best_slot = slot_index
 
 
 		var chosen_angle: float = (
 			angle_offset
-				+ TAU
-				* float(
-					best_slot
-				)
-				/ float(
-					slot_count
-				)
+			+ TAU
+			* float(
+				best_slot
+			)
+			/ float(
+				slot_count
+			)
 		)
 
 
@@ -1776,16 +2394,13 @@ func _build_slot_assignments(
 		)
 
 
-		var chosen_position: Vector2 = (
+		assignments[
+			enemy.get_instance_id()
+		] = (
 			player.global_position
 			+ chosen_direction
 			* radius
 		)
-
-
-		assignments[
-			enemy.get_instance_id()
-		] = chosen_position
 
 
 		available_slots.erase(
@@ -1834,14 +2449,6 @@ func _get_active_enemies() -> Array[Node]:
 
 				continue
 
-		elif enemy.has_method(
-			"is_enemy_alive"
-		):
-
-			if not enemy.is_enemy_alive():
-
-				continue
-
 
 		active_enemies.append(
 			enemy
@@ -1852,7 +2459,7 @@ func _get_active_enemies() -> Array[Node]:
 
 
 # =========================================================
-# ¿ESTÁ ACTIVO EN COMBATE?
+# COMBAT ACTIVE
 # =========================================================
 
 func is_combat_active() -> bool:
@@ -1867,8 +2474,6 @@ func is_combat_active() -> bool:
 		return false
 
 
-	# Un enemigo empujado o recuperándose no debe reservar
-	# un slot de ataque mientras no puede combatir.
 	if knockback_velocity != Vector2.ZERO:
 
 		return false
@@ -1895,7 +2500,7 @@ func is_combat_active() -> bool:
 
 
 # =========================================================
-# ORDENAR POR DISTANCIA
+# ORDEN DISTANCIA
 # =========================================================
 
 func _sort_enemies_by_distance_to_player(
@@ -1953,15 +2558,6 @@ func _sort_enemies_by_distance_to_player(
 
 
 # =========================================================
-# ¿VIVO?
-# =========================================================
-
-func is_enemy_alive() -> bool:
-
-	return health > 0
-
-
-# =========================================================
 # AVOIDANCE CALLBACK
 # =========================================================
 
@@ -1984,6 +2580,16 @@ func _on_navigation_agent_velocity_computed(
 		return
 
 
+	if stagger_recovery_time_left > 0.0:
+
+		return
+
+
+	if current_attack != null:
+
+		return
+
+
 	if not is_instance_valid(
 		player
 	):
@@ -2000,16 +2606,13 @@ func _on_navigation_agent_velocity_computed(
 			return
 
 
-	velocity = (
-		safe_velocity
-	)
-
+	velocity = safe_velocity
 
 	move_and_slide()
 
 
 # =========================================================
-# DETENER
+# STOP
 # =========================================================
 
 func _stop_navigation() -> void:
@@ -2018,96 +2621,16 @@ func _stop_navigation() -> void:
 
 	velocity = Vector2.ZERO
 
-	navigation_agent.velocity = (
-		Vector2.ZERO
-	)
 
+	if navigation_agent != null:
 
-# =========================================================
-# ATAQUE
-# =========================================================
-
-func _attack_player() -> void:
-
-	if not is_instance_valid(
-		player
-	):
-
-		return
-
-
-	if primary_attack == null:
-
-		return
-
-
-	if player.has_method(
-		"is_alive"
-	):
-
-		if not player.is_alive():
-
-			return
-
-
-	_face_player()
-
-	_update_attack_hitbox()
-
-
-	# -----------------------------------------------------
-	# SEGURIDAD:
-	# SOLO HAY DAÑO SI LA HITBOX SIGUE TOCANDO AL PLAYER
-	# -----------------------------------------------------
-
-	if not _attack_hitbox_reaches_player():
-
-		return
-
-
-	attack_cooldown_left = (
-		primary_attack.cooldown
-	)
-
-
-	print(
-		"=============================="
-	)
-
-	print(
-		enemy_data.enemy_name,
-		" USA ",
-		primary_attack.attack_name
-	)
-
-	print(
-		"DISTANCIA ENTRE ORIGINS: ",
-		global_position.distance_to(
-			player.global_position
-		)
-	)
-
-	print(
-		"=============================="
-	)
-
-
-	_attack_flash()
-
-
-	if player.has_method(
-		"take_damage"
-	):
-
-		player.take_damage(
-			primary_attack.damage,
-			global_position,
-			primary_attack.knockback_force
+		navigation_agent.velocity = (
+			Vector2.ZERO
 		)
 
 
 # =========================================================
-# FLASH ATAQUE
+# ATTACK FLASH
 # =========================================================
 
 func _attack_flash() -> void:
@@ -2204,15 +2727,11 @@ func _show_damage_number(
 	amount: int
 ) -> void:
 
-	var damage_label: Label = (
-		Label.new()
-	)
+	var damage_label: Label = Label.new()
 
 
-	damage_label.text = (
-		str(
-			amount
-		)
+	damage_label.text = str(
+		amount
 	)
 
 
@@ -2225,7 +2744,6 @@ func _show_damage_number(
 	damage_label.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
-
 
 	damage_label.vertical_alignment = (
 		VERTICAL_ALIGNMENT_CENTER
@@ -2363,9 +2881,7 @@ func _apply_knockback(
 
 	if direction.length_squared() < 0.001:
 
-		direction = (
-			Vector2.DOWN
-		)
+		direction = Vector2.DOWN
 
 	else:
 
@@ -2373,13 +2889,6 @@ func _apply_knockback(
 			direction.normalized()
 		)
 
-
-	# -----------------------------------------------------
-	# KNOCKBACK EFECTIVO
-	#
-	# La resistencia del tipo de enemigo se aplica ANTES
-	# tanto del empuje físico como del cálculo de stagger.
-	# -----------------------------------------------------
 
 	var effective_knockback: float = (
 		_get_effective_knockback(
@@ -2393,26 +2902,26 @@ func _apply_knockback(
 		return
 
 
-	# -----------------------------------------------------
-	# EMPUJE FÍSICO
-	# -----------------------------------------------------
+	# =====================================================
+	# CANCELAR ATAQUE POR IMPACTO FUERTE
+	# =====================================================
+
+	if (
+		current_attack != null
+		and
+		effective_knockback
+		>
+		enemy_data.attack_interrupt_knockback_threshold
+	):
+
+		_cancel_current_attack()
+
 
 	knockback_velocity = (
 		direction
 		* effective_knockback
 	)
 
-
-	# -----------------------------------------------------
-	# STAGGER / RECUPERACIÓN
-	#
-	# Golpes leves:
-	# solo empujan.
-	#
-	# Golpes que superan stagger_threshold:
-	# además dejan un pequeño tiempo de recuperación una
-	# vez que termina el desplazamiento.
-	# -----------------------------------------------------
 
 	var recovery_duration: float = (
 		_calculate_stagger_recovery_duration(
@@ -2440,6 +2949,15 @@ func _apply_knockback(
 
 
 # =========================================================
+# VIVO
+# =========================================================
+
+func is_enemy_alive() -> bool:
+
+	return health > 0
+
+
+# =========================================================
 # MUERTE
 # =========================================================
 
@@ -2449,6 +2967,9 @@ func die() -> void:
 		enemy_data.enemy_name,
 		" DERROTADO"
 	)
+
+
+	_cancel_current_attack()
 
 
 	wants_navigation_movement = false
@@ -2463,16 +2984,12 @@ func die() -> void:
 
 		navigation_agent.avoidance_enabled = false
 
-		navigation_agent.velocity = (
-			Vector2.ZERO
-		)
+		navigation_agent.velocity = Vector2.ZERO
 
 
 	velocity = Vector2.ZERO
 
-	knockback_velocity = (
-		Vector2.ZERO
-	)
+	knockback_velocity = Vector2.ZERO
 
 	stagger_recovery_time_left = 0.0
 
@@ -2481,7 +2998,7 @@ func die() -> void:
 
 
 # =========================================================
-# DEBUG VISUAL
+# DEBUG
 # =========================================================
 
 func _draw() -> void:
@@ -2517,10 +3034,6 @@ func _draw() -> void:
 	)
 
 
-	# -----------------------------------------------------
-	# SLOT
-	# -----------------------------------------------------
-
 	draw_line(
 		Vector2.ZERO,
 		slot_local,
@@ -2546,10 +3059,6 @@ func _draw() -> void:
 		true
 	)
 
-
-	# -----------------------------------------------------
-	# ESTADO
-	# -----------------------------------------------------
 
 	var state_color: Color
 
@@ -2600,8 +3109,29 @@ func _draw() -> void:
 	)
 
 
+	var attack_to_draw: AttackData = (
+		primary_attack
+	)
+
+
+	var direction_to_draw: Vector2 = (
+		_get_attack_direction()
+	)
+
+
+	if current_attack != null:
+
+		attack_to_draw = current_attack
+
+		direction_to_draw = (
+			locked_attack_direction
+		)
+
+
 	_draw_attack_hitbox(
-		state_color
+		state_color,
+		attack_to_draw,
+		direction_to_draw
 	)
 
 
@@ -2610,32 +3140,49 @@ func _draw() -> void:
 # =========================================================
 
 func _draw_attack_hitbox(
-	outline_color: Color
+	outline_color: Color,
+	attack: AttackData,
+	direction: Vector2
 ) -> void:
 
-	if attack_area == null:
+	if attack == null:
 
 		return
 
 
-	if primary_attack == null:
+	if direction == Vector2.ZERO:
 
-		return
+		direction = Vector2.DOWN
+
+
+	direction = direction.normalized()
 
 
 	var half_size: Vector2 = Vector2(
-		primary_attack.hitbox_length
+		attack.hitbox_length
 		* 0.5,
-
-		primary_attack.hitbox_width
+		attack.hitbox_width
 		* 0.5
+	)
+
+
+	var center_distance: float = (
+		attack.hitbox_start_offset
+		+ attack.hitbox_length
+		* 0.5
+	)
+
+
+	var hitbox_position: Vector2 = (
+		direction
+		* center_distance
 	)
 
 
 	var hitbox_transform: Transform2D = (
 		Transform2D(
-			attack_area.rotation,
-			attack_area.position
+			direction.angle(),
+			hitbox_position
 		)
 	)
 
