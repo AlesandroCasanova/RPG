@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemData" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/goblin_shard.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+item_id = &"goblin_shard"
+display_name = "Fragmento goblin"
+description = "Material tosco que podría utilizarse para fabricar o comerciar."
+item_type = 2
+icon = ExtResource("2_icon")
+stackable = true
+max_stack = 50

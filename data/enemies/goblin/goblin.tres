@@ -1,6 +1,21 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://b50jil5mbucoe"]
 
 [ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_oejan"]
+[ext_resource type="Script" path="res://scripts/items/loot_entry.gd" id="2_loot"]
+[ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="3_shard"]
+[ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="4_sword"]
+
+[sub_resource type="Resource" id="Loot_shard"]
+script = ExtResource("2_loot")
+item = ExtResource("3_shard")
+drop_chance = 0.85
+min_quantity = 1
+max_quantity = 3
+
+[sub_resource type="Resource" id="Loot_sword"]
+script = ExtResource("2_loot")
+item = ExtResource("4_sword")
+drop_chance = 0.12
 
 [resource]
 script = ExtResource("1_oejan")
@@ -9,6 +24,7 @@ can_use_heavy_attacks = true
 can_use_charged_attacks = true
 uses_stamina = true
 max_stamina = 249.0
-max_simultaneous_attackers = 3
+max_simultaneous_attackers = 1
+loot_table = Array[ExtResource("2_loot")]([SubResource("Loot_shard"), SubResource("Loot_sword")])
 knockback_force = 0.0
 metadata/_custom_type_script = "uid://bqmn1j27q23ip"

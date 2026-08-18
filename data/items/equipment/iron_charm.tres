@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemData" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/iron_charm.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+item_id = &"iron_charm"
+display_name = "Amuleto de hierro"
+description = "Un talismán pesado que ayuda a resistir impactos."
+item_type = 1
+rarity = 1
+icon = ExtResource("2_icon")
+equipment_slot = 3
+vitality_bonus = 3
+willpower_bonus = 2

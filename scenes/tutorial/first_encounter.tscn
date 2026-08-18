@@ -1,0 +1,42 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="PackedScene" path="res://world.tscn" id="1_world"]
+[ext_resource type="PackedScene" path="res://scenes/npcs/maela/maela.tscn" id="2_maela"]
+[ext_resource type="PackedScene" path="res://scenes/ui/dialogue_ui.tscn" id="3_dialogue"]
+[ext_resource type="PackedScene" path="res://scenes/ui/quest_tracker.tscn" id="4_quest"]
+[ext_resource type="Script" path="res://scripts/tutorial/frontier_environment.gd" id="5_environment"]
+[ext_resource type="Script" path="res://scripts/tutorial/first_encounter_controller.gd" id="6_controller"]
+[ext_resource type="PackedScene" path="res://scenes/npcs/ivar/ivar.tscn" id="7_ivar"]
+[ext_resource type="PackedScene" path="res://scenes/tutorial/investigation_point.tscn" id="8_point"]
+[ext_resource type="PackedScene" path="res://scenes/ui/world_map_ui.tscn" id="9_map"]
+
+[node name="FirstEncounter" type="Node2D"]
+
+[node name="World" parent="." instance=ExtResource("1_world")]
+
+[node name="FrontierEnvironment" type="Node" parent="."]
+script = ExtResource("5_environment")
+
+[node name="Maela" parent="." instance=ExtResource("2_maela")]
+position = Vector2(930, 505)
+
+[node name="Ivar" parent="." instance=ExtResource("7_ivar")]
+position = Vector2(2025, 1070)
+
+[node name="BattlefieldScar1" parent="." instance=ExtResource("8_point")]
+position = Vector2(1390, 700)
+
+[node name="BattlefieldScar2" parent="." instance=ExtResource("8_point")]
+position = Vector2(1660, 870)
+
+[node name="BattlefieldScar3" parent="." instance=ExtResource("8_point")]
+position = Vector2(1880, 720)
+
+[node name="DialogueUI" parent="." instance=ExtResource("3_dialogue")]
+
+[node name="QuestTracker" parent="." instance=ExtResource("4_quest")]
+
+[node name="WorldMapUI" parent="." instance=ExtResource("9_map")]
+
+[node name="TutorialController" type="Node" parent="."]
+script = ExtResource("6_controller")

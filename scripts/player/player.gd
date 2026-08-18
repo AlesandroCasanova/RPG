@@ -1,6 +1,59 @@
 extends CharacterBody2D
 
 
+const SpriteSheetAnimationBuilder = preload(
+	"res://scripts/animation/sprite_sheet_animation.gd"
+)
+
+const PLAYER_WALK_SHEET: Texture2D = preload(
+	"res://assets/characters/player/sprites/actions/player_walk_cardinal.png"
+)
+
+const PLAYER_CROUCH_SHEET: Texture2D = preload(
+	"res://assets/characters/player/sprites/actions/player_crouch_cardinal.png"
+)
+
+const PLAYER_ATTACK_SHEET: Texture2D = preload(
+	"res://assets/characters/player/sprites/actions/player_attack_cardinal.png"
+)
+
+const PLAYER_DASH_SHEET: Texture2D = preload(
+	"res://assets/characters/player/sprites/actions/player_dash_cardinal.png"
+)
+
+
+# =========================================================
+# ATRIBUTOS PRIMARIOS
+# =========================================================
+
+@export_category("Atributos primarios")
+
+@export_range(1, 99, 1)
+var vitality: int = 5
+
+@export_range(1, 99, 1)
+var strength: int = 5
+
+@export_range(1, 99, 1)
+var dexterity: int = 5
+
+@export_range(1, 99, 1)
+var endurance: int = 5
+
+@export_range(1, 99, 1)
+var intelligence: int = 5
+
+@export_range(1, 99, 1)
+var willpower: int = 5
+
+var effective_vitality: int = 5
+var effective_strength: int = 5
+var effective_dexterity: int = 5
+var effective_endurance: int = 5
+var effective_intelligence: int = 5
+var effective_willpower: int = 5
+
+
 # =========================================================
 # MOVIMIENTO
 # =========================================================
@@ -8,6 +61,20 @@ extends CharacterBody2D
 @export var speed: float = 300.0
 @export var sprint_speed: float = 450.0
 @export var sprint_stamina_per_second: float = 20.0
+
+@export var crouch_speed: float = 80.0
+
+@export_range(0.0, 1.0, 0.01)
+var crouch_noise_multiplier: float = 0.12
+
+@export_range(1.0, 3.0, 0.05)
+var sprint_noise_multiplier: float = 1.35
+
+@export_range(0.5, 1.0, 0.01)
+var crouch_visual_height: float = 0.82
+
+@export_range(0.0, 50.0, 1.0)
+var crouch_visual_offset: float = 10.0
 
 
 # =========================================================
@@ -22,6 +89,59 @@ var stamina: float = 100.0
 var stamina_regen_delay_left: float = 0.0
 
 var is_sprinting: bool = false
+
+var is_crouching: bool = false
+
+var standing_sprite_scale: Vector2 = Vector2.ONE
+
+var standing_sprite_position: Vector2 = Vector2.ZERO
+
+var crouch_debug_label: Label = null
+
+
+# =========================================================
+# MANÁ / PODER MÁGICO
+# =========================================================
+
+@export var max_mana: float = 60.0
+@export var mana_regen_rate: float = 5.0
+@export var magic_power: float = 10.0
+
+var mana: float = 60.0
+
+var attack_speed_multiplier: float = 1.0
+
+
+# =========================================================
+# ESTADÍSTICAS BASE / EQUIPAMIENTO
+# =========================================================
+
+var base_speed: float = 0.0
+var base_sprint_speed: float = 0.0
+var base_crouch_speed: float = 0.0
+var base_max_health: int = 0
+var base_max_stamina: float = 0.0
+var base_stamina_regen_rate: float = 0.0
+var base_sprint_stamina_per_second: float = 0.0
+var base_dash_stamina_cost: float = 0.0
+var base_max_mana: float = 0.0
+var base_mana_regen_rate: float = 0.0
+var base_magic_power: float = 0.0
+var base_attack_damage: int = 0
+var base_heavy_attack_damage: int = 0
+var base_charged_attack_damage: int = 0
+var base_attack_knockback_force: float = 0.0
+var base_heavy_attack_knockback_force: float = 0.0
+var base_charged_attack_knockback_force: float = 0.0
+var base_knockback_resistance: float = 0.0
+var base_attack_duration: float = 0.0
+var base_attack_cooldown: float = 0.0
+var base_heavy_attack_windup: float = 0.0
+var base_heavy_attack_hit_duration: float = 0.0
+var base_heavy_attack_total_duration: float = 0.0
+var base_charged_attack_windup: float = 0.0
+var base_charged_attack_hit_duration: float = 0.0
+var base_charged_attack_total_duration: float = 0.0
 
 
 # =========================================================
@@ -265,10 +385,18 @@ var double_tap_time_left: float = 0.0
 
 func _ready() -> void:
 
+	_capture_base_stats()
+
 	health = max_health
 	stamina = max_stamina
+	mana = max_mana
 
 	add_to_group("player")
+
+	standing_sprite_scale = player_animated.scale
+	standing_sprite_position = player_animated.position
+	_setup_action_animations()
+	_create_crouch_debug_label()
 
 	collision_layer = 1
 
@@ -374,6 +502,10 @@ func _physics_process(delta: float) -> void:
 
 	_update_stamina_regen(delta)
 
+	_update_mana_regen(delta)
+
+	_update_crouch_state()
+
 
 	# -----------------------------------------------------
 	# PESADO / CARGADO
@@ -428,13 +560,14 @@ func _physics_process(delta: float) -> void:
 	if is_dashing:
 
 		is_sprinting = false
+		_set_crouching(false)
 
 		velocity = (
 			dash_direction
 			* dash_speed
 		)
 
-		_play_walk()
+		_play_action_animation("dash")
 
 		move_and_slide()
 
@@ -489,7 +622,11 @@ func _physics_process(delta: float) -> void:
 
 	is_sprinting = false
 
-	var current_move_speed: float = speed
+	var current_move_speed: float = (
+		crouch_speed
+		if is_crouching
+		else speed
+	)
 
 
 	# -----------------------------------------------------
@@ -502,6 +639,8 @@ func _physics_process(delta: float) -> void:
 		Input.is_action_pressed("sprint")
 		and
 		stamina > 0.0
+		and
+		not is_crouching
 		and
 		not is_charging_heavy
 		and
@@ -542,7 +681,11 @@ func _physics_process(delta: float) -> void:
 	# ANIMACIONES
 	# -----------------------------------------------------
 
-	if movement_input != Vector2.ZERO:
+	if attack_action_time_left > 0.0 or is_charging_heavy:
+
+		_play_action_animation("attack")
+
+	elif movement_input != Vector2.ZERO:
 
 		_play_walk()
 
@@ -563,6 +706,327 @@ func _physics_process(delta: float) -> void:
 
 
 	move_and_slide()
+
+
+# =========================================================
+# SIGILO / AGACHARSE
+# =========================================================
+
+func _update_crouch_state() -> void:
+
+	var wants_to_crouch: bool = (
+		Input.is_action_pressed("crouch")
+		and
+		not is_dashing
+		and
+		received_knockback_velocity == Vector2.ZERO
+	)
+
+
+	_set_crouching(wants_to_crouch)
+
+
+func _set_crouching(new_state: bool) -> void:
+
+	if is_crouching == new_state:
+
+		return
+
+
+	is_crouching = new_state
+
+
+	var has_crouch_sprites: bool = player_animated.sprite_frames.has_animation(
+		&"crouch_s"
+	)
+
+
+	if is_crouching and not has_crouch_sprites:
+
+		player_animated.scale = Vector2(
+			standing_sprite_scale.x,
+			standing_sprite_scale.y * crouch_visual_height
+		)
+		player_animated.position = (
+			standing_sprite_position
+			+ Vector2(0.0, crouch_visual_offset)
+		)
+
+	else:
+
+		player_animated.scale = standing_sprite_scale
+		player_animated.position = standing_sprite_position
+
+
+	if is_crouching:
+
+		_play_action_animation("crouch")
+
+
+	if crouch_debug_label != null:
+
+		crouch_debug_label.visible = is_crouching
+
+
+func _create_crouch_debug_label() -> void:
+
+	crouch_debug_label = Label.new()
+	crouch_debug_label.name = "CrouchDebugLabel"
+	crouch_debug_label.text = "SIGILO"
+	crouch_debug_label.position = Vector2(-45.0, -125.0)
+	crouch_debug_label.custom_minimum_size = Vector2(90.0, 24.0)
+	crouch_debug_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	crouch_debug_label.add_theme_font_size_override("font_size", 13)
+	crouch_debug_label.add_theme_color_override(
+		"font_color",
+		Color(0.35, 0.9, 1.0, 1.0)
+	)
+	crouch_debug_label.add_theme_color_override(
+		"font_outline_color",
+		Color.BLACK
+	)
+	crouch_debug_label.add_theme_constant_override("outline_size", 4)
+	crouch_debug_label.z_index = 200
+	crouch_debug_label.visible = false
+	add_child(crouch_debug_label)
+
+
+func get_movement_noise_level() -> float:
+
+	var noise_level: float = velocity.length()
+
+
+	if is_crouching:
+
+		noise_level *= crouch_noise_multiplier
+
+	elif is_sprinting or is_dashing:
+
+		noise_level *= sprint_noise_multiplier
+
+
+	return noise_level
+
+
+# =========================================================
+# EQUIPAMIENTO
+# =========================================================
+
+func _capture_base_stats() -> void:
+
+	effective_vitality = vitality
+	effective_strength = strength
+	effective_dexterity = dexterity
+	effective_endurance = endurance
+	effective_intelligence = intelligence
+	effective_willpower = willpower
+
+	base_speed = speed
+	base_sprint_speed = sprint_speed
+	base_crouch_speed = crouch_speed
+	base_max_health = max_health
+	base_max_stamina = max_stamina
+	base_stamina_regen_rate = stamina_regen_rate
+	base_sprint_stamina_per_second = sprint_stamina_per_second
+	base_dash_stamina_cost = dash_stamina_cost
+	base_max_mana = max_mana
+	base_mana_regen_rate = mana_regen_rate
+	base_magic_power = magic_power
+	base_attack_damage = attack_damage
+	base_heavy_attack_damage = heavy_attack_damage
+	base_charged_attack_damage = charged_attack_damage
+	base_attack_knockback_force = attack_knockback_force
+	base_heavy_attack_knockback_force = heavy_attack_knockback_force
+	base_charged_attack_knockback_force = charged_attack_knockback_force
+	base_knockback_resistance = knockback_resistance
+	base_attack_duration = attack_duration
+	base_attack_cooldown = attack_cooldown
+	base_heavy_attack_windup = heavy_attack_windup
+	base_heavy_attack_hit_duration = heavy_attack_hit_duration
+	base_heavy_attack_total_duration = heavy_attack_total_duration
+	base_charged_attack_windup = charged_attack_windup
+	base_charged_attack_hit_duration = charged_attack_hit_duration
+	base_charged_attack_total_duration = charged_attack_total_duration
+
+
+func get_inventory() -> PlayerInventory:
+
+	return get_node_or_null("Inventory") as PlayerInventory
+
+
+func apply_equipment_bonuses(bonuses: Dictionary) -> void:
+
+	var missing_health: int = maxi(max_health - health, 0)
+	var missing_stamina: float = maxf(max_stamina - stamina, 0.0)
+	var missing_mana: float = maxf(max_mana - mana, 0.0)
+
+
+	effective_vitality = vitality + int(bonuses.get("vitality", 0))
+	effective_strength = strength + int(bonuses.get("strength", 0))
+	effective_dexterity = dexterity + int(bonuses.get("dexterity", 0))
+	effective_endurance = endurance + int(bonuses.get("endurance", 0))
+	effective_intelligence = intelligence + int(bonuses.get("intelligence", 0))
+	effective_willpower = willpower + int(bonuses.get("willpower", 0))
+
+
+	var vitality_delta: int = effective_vitality - vitality
+	var strength_delta: int = effective_strength - strength
+	var dexterity_delta: int = effective_dexterity - dexterity
+	var endurance_delta: int = effective_endurance - endurance
+	var intelligence_delta: int = effective_intelligence - intelligence
+	var willpower_delta: int = effective_willpower - willpower
+
+
+	max_health = maxi(
+		base_max_health + vitality_delta * 12,
+		1
+	)
+	max_stamina = maxf(
+		base_max_stamina + float(endurance_delta) * 10.0,
+		1.0
+	)
+	max_mana = maxf(
+		base_max_mana
+		+ float(intelligence_delta) * 12.0
+		+ float(willpower_delta) * 4.0,
+		1.0
+	)
+
+	health = clampi(max_health - missing_health, 1, max_health)
+	stamina = clampf(max_stamina - missing_stamina, 0.0, max_stamina)
+	mana = clampf(max_mana - missing_mana, 0.0, max_mana)
+
+
+	speed = base_speed + float(dexterity_delta) * 8.0
+	sprint_speed = base_sprint_speed + float(dexterity_delta) * 10.0
+	crouch_speed = base_crouch_speed + float(dexterity_delta) * 6.0
+
+	stamina_regen_rate = (
+		base_stamina_regen_rate
+		+ float(endurance_delta) * 1.5
+	)
+	sprint_stamina_per_second = maxf(
+		base_sprint_stamina_per_second
+		- float(endurance_delta) * 0.75,
+		5.0
+	)
+	dash_stamina_cost = maxf(
+		base_dash_stamina_cost
+		- float(endurance_delta),
+		5.0
+	)
+
+	mana_regen_rate = (
+		base_mana_regen_rate
+		+ float(willpower_delta) * 1.25
+		+ float(intelligence_delta) * 0.35
+	)
+	magic_power = base_magic_power * (
+		1.0
+		+ float(intelligence_delta) * 0.08
+		+ float(willpower_delta) * 0.025
+	)
+
+
+	var physical_damage_multiplier: float = (
+		1.0 + float(strength_delta) * 0.06
+	)
+	attack_damage = roundi(
+		float(base_attack_damage) * physical_damage_multiplier
+	)
+	heavy_attack_damage = roundi(
+		float(base_heavy_attack_damage) * physical_damage_multiplier
+	)
+	charged_attack_damage = roundi(
+		float(base_charged_attack_damage) * physical_damage_multiplier
+	)
+
+
+	var physical_force_multiplier: float = (
+		1.0 + float(strength_delta) * 0.05
+	)
+	heavy_attack_knockback_force = (
+		base_heavy_attack_knockback_force
+		* physical_force_multiplier
+	)
+	charged_attack_knockback_force = (
+		base_charged_attack_knockback_force
+		* physical_force_multiplier
+	)
+	attack_knockback_force = (
+		base_attack_knockback_force
+		* physical_force_multiplier
+	)
+
+
+	knockback_resistance = clampf(
+		base_knockback_resistance
+		+ float(vitality_delta) * 0.01
+		+ float(endurance_delta) * 0.005,
+		0.0,
+		1.0
+	)
+
+
+	attack_speed_multiplier = (
+		1.0 + float(dexterity_delta) * 0.035
+	)
+	attack_duration = base_attack_duration / attack_speed_multiplier
+	attack_cooldown = base_attack_cooldown / attack_speed_multiplier
+	heavy_attack_windup = base_heavy_attack_windup / attack_speed_multiplier
+	heavy_attack_hit_duration = base_heavy_attack_hit_duration / attack_speed_multiplier
+	heavy_attack_total_duration = base_heavy_attack_total_duration / attack_speed_multiplier
+	charged_attack_windup = base_charged_attack_windup / attack_speed_multiplier
+	charged_attack_hit_duration = base_charged_attack_hit_duration / attack_speed_multiplier
+	charged_attack_total_duration = base_charged_attack_total_duration / attack_speed_multiplier
+
+
+	print(
+		"EQUIPO ACTUALIZADO | HP ",
+		max_health,
+		" | ST ",
+		max_stamina,
+		" | MP ",
+		max_mana,
+		" | DAÑO ",
+		attack_damage,
+		" | VEL ",
+		speed
+	)
+
+
+# =========================================================
+# MANÁ
+# =========================================================
+
+func _update_mana_regen(delta: float) -> void:
+
+	if mana >= max_mana:
+
+		mana = max_mana
+		return
+
+
+	mana = minf(
+		max_mana,
+		mana + mana_regen_rate * delta
+	)
+
+
+func spend_mana(amount: float) -> bool:
+
+	if amount <= 0.0:
+
+		return true
+
+
+	if mana < amount:
+
+		return false
+
+
+	mana = maxf(mana - amount, 0.0)
+	return true
 
 
 # =========================================================
@@ -1767,6 +2231,9 @@ func _start_dash(
 	)
 
 
+	_update_facing_from_aim(dash_direction)
+
+
 	dash_time_left = (
 		dash_duration
 	)
@@ -2014,6 +2481,11 @@ func _get_facing_direction() -> Vector2:
 
 func _play_idle() -> void:
 
+	if is_crouching:
+
+		_play_action_animation("crouch")
+		return
+
 	var animation_name: String = (
 		"idle_" + last_facing
 	)
@@ -2036,8 +2508,16 @@ func _play_idle() -> void:
 
 func _play_walk() -> void:
 
+	var animation_prefix: String = (
+		"crouch"
+		if is_crouching
+		else "walk"
+	)
+
 	var animation_name: String = (
-		"walk_" + last_facing
+		animation_prefix
+		+ "_"
+		+ _get_cardinal_animation_facing()
 	)
 
 
@@ -2068,6 +2548,80 @@ func _play_walk() -> void:
 				player_animated.play(
 					idle_name
 				)
+
+
+func _setup_action_animations() -> void:
+
+	var frames: SpriteFrames = player_animated.sprite_frames
+
+
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		frames,
+		PLAYER_WALK_SHEET,
+		"walk",
+		9.0,
+		true
+	)
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		frames,
+		PLAYER_CROUCH_SHEET,
+		"crouch",
+		7.0,
+		true
+	)
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		frames,
+		PLAYER_ATTACK_SHEET,
+		"attack",
+		28.0,
+		false
+	)
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		frames,
+		PLAYER_DASH_SHEET,
+		"dash",
+		28.0,
+		false
+	)
+
+
+func _play_action_animation(animation_prefix: String) -> void:
+
+	var animation_name: StringName = StringName(
+		animation_prefix
+		+ "_"
+		+ _get_cardinal_animation_facing()
+	)
+
+
+	if not player_animated.sprite_frames.has_animation(animation_name):
+
+		return
+
+
+	if player_animated.animation != animation_name:
+
+		player_animated.play(animation_name)
+
+
+func _get_cardinal_animation_facing() -> String:
+
+	match last_facing:
+
+		"n":
+			return "n"
+
+		"ne", "e", "se":
+			return "e"
+
+		"s":
+			return "s"
+
+		"sw", "w", "nw":
+			return "w"
+
+
+	return "s"
 
 
 # =========================================================

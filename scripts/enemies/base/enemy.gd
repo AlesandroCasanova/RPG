@@ -2,6 +2,22 @@ class_name Enemy
 extends CharacterBody2D
 
 
+signal defeated(enemy: Enemy)
+
+
+const SpriteSheetAnimationBuilder = preload(
+	"res://scripts/animation/sprite_sheet_animation.gd"
+)
+
+const GOBLIN_WALK_SHEET: Texture2D = preload(
+	"res://assets/characters/enemies/goblin/sprites/actions/goblin_walk_cardinal.png"
+)
+
+const GOBLIN_ATTACK_SHEET: Texture2D = preload(
+	"res://assets/characters/enemies/goblin/sprites/actions/goblin_attack_cardinal.png"
+)
+
+
 # =========================================================
 # RECURSOS
 # =========================================================
@@ -15,6 +31,8 @@ extends CharacterBody2D
 @export var heavy_attack: AttackData
 
 @export var charged_attack: AttackData
+
+@export var ai_profile: EnemyAIProfile
 
 
 # =========================================================
@@ -40,6 +58,8 @@ var attack_collision_mask: int = 1
 @export_category("Debug")
 
 @export var debug_combat: bool = false
+
+@export var debug_ai_scores: bool = true
 
 
 # =========================================================
@@ -87,6 +107,10 @@ var player: CharacterBody2D = null
 
 var wants_navigation_movement: bool = false
 
+var loot_random: RandomNumberGenerator = RandomNumberGenerator.new()
+
+var is_dying: bool = false
+
 
 # =========================================================
 # STAMINA
@@ -133,12 +157,35 @@ var debug_hitbox_reaches_player: bool = false
 
 var debug_distance_to_player: float = 0.0
 
+var debug_ai_label: Label = null
+
+
+# =========================================================
+# INTELIGENCIA DE COMBATE
+# =========================================================
+
+var perception: EnemyPerception = null
+
+var utility_brain: EnemyUtilityBrain = null
+
+var squad_coordinator: EnemySquadCoordinator = null
+
+var ai_role: StringName = &"support"
+
+var ai_action: StringName = &"hold"
+
+var ai_target_position: Vector2 = Vector2.ZERO
+
+var ai_can_attack: bool = false
+
 
 # =========================================================
 # READY
 # =========================================================
 
 func _ready() -> void:
+
+	loot_random.randomize()
 
 	if not _validate_required_nodes():
 
@@ -148,6 +195,8 @@ func _ready() -> void:
 
 
 	_ensure_resources()
+
+	_setup_combat_intelligence()
 
 
 	health = maxi(
@@ -183,8 +232,11 @@ func _ready() -> void:
 	_setup_attack_area()
 
 	_setup_navigation_avoidance()
+	_setup_action_animations()
 
 	_play_idle()
+
+	_update_ai_debug_label()
 
 
 	print(
@@ -264,6 +316,47 @@ func _ensure_resources() -> void:
 		)
 
 		primary_attack = AttackData.new()
+
+
+# =========================================================
+# CONFIGURAR INTELIGENCIA DE COMBATE
+# =========================================================
+
+func _setup_combat_intelligence() -> void:
+
+	if ai_profile == null:
+
+		ai_profile = EnemyAIProfile.new()
+
+
+	perception = EnemyPerception.new()
+	perception.configure(
+		self,
+		player,
+		ai_profile
+	)
+
+
+	utility_brain = EnemyUtilityBrain.new()
+	utility_brain.configure(ai_profile)
+
+
+	squad_coordinator = EnemySquadCoordinator.new()
+
+
+	if debug_combat:
+
+		debug_ai_label = Label.new()
+		debug_ai_label.name = "AIDebugLabel"
+		debug_ai_label.position = Vector2(-75.0, -92.0)
+		debug_ai_label.custom_minimum_size = Vector2(150.0, 42.0)
+		debug_ai_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		debug_ai_label.add_theme_font_size_override("font_size", 11)
+		debug_ai_label.add_theme_color_override("font_color", Color.WHITE)
+		debug_ai_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		debug_ai_label.add_theme_constant_override("outline_size", 4)
+		debug_ai_label.z_index = 100
+		add_child(debug_ai_label)
 
 
 # =========================================================
@@ -485,6 +578,19 @@ func _physics_process(
 	)
 
 
+	if not is_instance_valid(player):
+
+		_find_player()
+
+
+	_update_combat_perception(delta)
+
+
+	if utility_brain != null:
+
+		utility_brain.update_timers(delta)
+
+
 	# =====================================================
 	# KNOCKBACK
 	# =====================================================
@@ -556,23 +662,22 @@ func _physics_process(
 
 
 	# =====================================================
-	# DETECCIÓN
+	# CONCIENCIA / MEMORIA
 	# =====================================================
 
-	debug_distance_to_player = (
-		global_position.distance_to(
-			player.global_position
-		)
+	debug_distance_to_player = global_position.distance_to(
+		player.global_position
 	)
 
 
-	if debug_distance_to_player > enemy_data.detection_range:
+	if perception == null or not perception.is_aware:
 
 		debug_can_attack = false
-
 		debug_hitbox_reaches_player = false
-
+		ai_role = &"unaware"
+		ai_action = &"idle"
 		_stop_navigation()
+		_update_ai_debug_label()
 
 
 		if debug_combat:
@@ -583,102 +688,10 @@ func _physics_process(
 		return
 
 
-	# =====================================================
-	# COMBATE GRUPAL
-	# =====================================================
-
-	var combat_info: Dictionary = (
-		_get_combat_info()
-	)
-
-
-	var combat_position: Vector2 = (
-		combat_info["position"]
-	)
-
-
-	var can_attack: bool = (
-		combat_info["can_attack"]
-	)
-
-
-	debug_combat_position = (
-		combat_position
-	)
-
-	debug_can_attack = (
-		can_attack
-	)
-
-
-	# =====================================================
-	# ATACANTE
-	# =====================================================
-
-	if can_attack:
-
-		_face_player()
-
-
-		var reachable_attacks: Array[AttackData] = (
-			_get_reachable_attacks()
-		)
-
-
-		debug_hitbox_reaches_player = (
-			not reachable_attacks.is_empty()
-		)
-
-
-		if debug_combat:
-
-			queue_redraw()
-
-
-		# -------------------------------------------------
-		# PUEDE ALCANZAR AL PLAYER
-		# -------------------------------------------------
-
-		if not reachable_attacks.is_empty():
-
-			_stop_navigation()
-
-
-			if attack_cooldown_left <= 0.0:
-
-				var selected_attack: AttackData = (
-					_choose_attack(
-						reachable_attacks
-					)
-				)
-
-
-				if selected_attack != null:
-
-					_start_attack(
-						selected_attack
-					)
-
-
-			return
-
-
-		# -------------------------------------------------
-		# TODAVÍA NO ALCANZA
-		# -------------------------------------------------
-
-		_move_toward_position(
-			combat_position
-		)
-
-		return
-
-
-	# =====================================================
-	# ESPERA
-	# =====================================================
-
-	debug_hitbox_reaches_player = false
+	_update_tactical_assignment()
+	_reconsider_ai_action()
+	_execute_ai_action()
+	_update_ai_debug_label()
 
 
 	if debug_combat:
@@ -686,9 +699,300 @@ func _physics_process(
 		queue_redraw()
 
 
-	_move_toward_position(
-		combat_position
+# =========================================================
+# PERCEPCIÓN Y MEMORIA
+# =========================================================
+
+func _update_combat_perception(delta: float) -> void:
+
+	if perception == null:
+
+		return
+
+
+	perception.set_target(player)
+	perception.update(
+		delta,
+		_get_perception_facing_direction()
 	)
+
+
+func _get_perception_facing_direction() -> Vector2:
+
+	if velocity.length_squared() > 0.001:
+
+		return velocity.normalized()
+
+
+	match last_facing:
+
+		"n":
+			return Vector2.UP
+
+		"ne":
+			return Vector2(1.0, -1.0).normalized()
+
+		"e":
+			return Vector2.RIGHT
+
+		"se":
+			return Vector2(1.0, 1.0).normalized()
+
+		"sw":
+			return Vector2(-1.0, 1.0).normalized()
+
+		"w":
+			return Vector2.LEFT
+
+		"nw":
+			return Vector2(-1.0, -1.0).normalized()
+
+
+	return Vector2.DOWN
+
+
+# =========================================================
+# COORDINACIÓN TÁCTICA
+# =========================================================
+
+func _update_tactical_assignment() -> void:
+
+	var active_enemies: Array[Node] = _get_active_enemies()
+
+
+	if not active_enemies.has(self):
+
+		active_enemies.append(self)
+
+
+	var assignment: Dictionary = squad_coordinator.get_assignment(
+		self,
+		active_enemies,
+		player,
+		enemy_data,
+		ai_profile
+	)
+
+
+	ai_role = StringName(assignment.get("role", &"support"))
+	ai_target_position = Vector2(
+		assignment.get("position", player.global_position)
+	)
+	ai_can_attack = bool(assignment.get("can_attack", false))
+
+	debug_combat_position = ai_target_position
+	debug_can_attack = ai_can_attack
+
+
+# =========================================================
+# DECISIÓN POR UTILIDAD
+# =========================================================
+
+func _reconsider_ai_action() -> void:
+
+	var reachable_attacks: Array[AttackData] = (
+		_get_reachable_attacks()
+	)
+
+
+	debug_hitbox_reaches_player = not reachable_attacks.is_empty()
+
+
+	var force_reconsideration: bool = (
+		(ai_action == &"attack" and not ai_can_attack)
+		or
+		(ai_action == &"search" and perception.has_line_of_sight)
+	)
+
+
+	if not utility_brain.should_reconsider(force_reconsideration):
+
+		return
+
+
+	var maximum_health: float = maxf(
+		float(enemy_data.max_health),
+		1.0
+	)
+	var maximum_stamina: float = maxf(
+		enemy_data.max_stamina,
+		1.0
+	)
+
+
+	var context: Dictionary = {
+		"visible": perception.has_line_of_sight,
+		"aware": perception.is_aware,
+		"can_attack": ai_can_attack,
+		"attack_reaches": not reachable_attacks.is_empty(),
+		"cooldown_ready": attack_cooldown_left <= 0.0,
+		"health_ratio": float(health) / maximum_health,
+		"stamina_ratio": stamina / maximum_stamina,
+		"distance": debug_distance_to_player,
+		"role": ai_role
+	}
+
+
+	ai_action = utility_brain.decide(context)
+
+
+# =========================================================
+# EJECUTAR INTENCIÓN
+# =========================================================
+
+func _execute_ai_action() -> void:
+
+	match ai_action:
+
+		&"attack":
+			_execute_attack_intention()
+
+		&"approach", &"flank":
+			_move_or_hold(ai_target_position, 10.0)
+
+		&"hold":
+			_move_or_hold(ai_target_position, 16.0)
+			_face_player()
+
+		&"retreat":
+			_move_or_hold(_get_retreat_position(), 12.0)
+
+		&"search":
+			_move_or_hold(perception.last_known_position, 12.0)
+
+		_:
+			_stop_navigation()
+
+
+func _execute_attack_intention() -> void:
+
+	_face_player()
+
+
+	var reachable_attacks: Array[AttackData] = (
+		_get_reachable_attacks()
+	)
+
+
+	debug_hitbox_reaches_player = not reachable_attacks.is_empty()
+
+
+	if reachable_attacks.is_empty():
+
+		_move_or_hold(ai_target_position, 8.0)
+		return
+
+
+	_stop_navigation()
+
+
+	if attack_cooldown_left > 0.0:
+
+		return
+
+
+	var selected_attack: AttackData = _choose_attack(
+		reachable_attacks
+	)
+
+
+	if selected_attack != null:
+
+		_start_attack(selected_attack)
+
+
+func _move_or_hold(target_position: Vector2, tolerance: float) -> void:
+
+	if global_position.distance_to(target_position) <= tolerance:
+
+		_stop_navigation()
+		return
+
+
+	_move_toward_position(target_position)
+
+
+func _get_retreat_position() -> Vector2:
+
+	var danger_position: Vector2 = perception.last_known_position
+
+
+	if perception.has_line_of_sight:
+
+		danger_position = player.global_position
+
+
+	var away_direction: Vector2 = global_position - danger_position
+
+
+	if away_direction.length_squared() < 0.001:
+
+		away_direction = Vector2.DOWN
+
+
+	return (
+		global_position
+		+ away_direction.normalized()
+		* ai_profile.retreat_distance
+	)
+
+
+# =========================================================
+# DEBUG DE IA
+# =========================================================
+
+func _update_ai_debug_label() -> void:
+
+	if debug_ai_label == null:
+
+		return
+
+
+	var awareness: String = "MEM"
+
+
+	if perception != null and perception.has_line_of_sight:
+
+		awareness = "VISION"
+
+	elif perception != null and perception.heard_target:
+
+		awareness = "OIDO"
+
+	elif perception == null or not perception.is_aware:
+
+		awareness = "CALMA"
+
+
+	debug_ai_label.text = (
+		String(ai_role).to_upper()
+		+ " | "
+		+ String(ai_action).to_upper()
+		+ " | "
+		+ awareness
+	)
+
+
+	if debug_ai_scores and utility_brain != null:
+
+		var score_parts: PackedStringArray = []
+
+
+		for action_variant: Variant in utility_brain.last_scores:
+
+			score_parts.append(
+				String(action_variant).substr(0, 3)
+				+ ":"
+				+ str(snappedf(
+					float(utility_brain.last_scores[action_variant]),
+					0.01
+				))
+			)
+
+
+		if not score_parts.is_empty():
+
+			debug_ai_label.text += "\n" + " ".join(score_parts)
 
 
 # =========================================================
@@ -936,49 +1240,73 @@ func _choose_attack(
 		return null
 
 
-	if candidates.size() == 1:
-
-		return candidates[0]
-
-
-	var total_weight: float = 0.0
+	var best_attack: AttackData = candidates[0]
+	var best_score: float = -INF
+	var target_is_committed: bool = false
 
 
-	for attack: AttackData in candidates:
+	if is_instance_valid(player):
 
-		total_weight += maxf(
-			attack.ai_weight,
-			0.0
-		)
-
-
-	if total_weight <= 0.0:
-
-		return candidates[0]
-
-
-	var roll: float = (
-		randf()
-		* total_weight
-	)
+		target_is_committed = float(
+			player.get("attack_action_time_left")
+		) > 0.15
 
 
 	for attack: AttackData in candidates:
 
-		roll -= maxf(
-			attack.ai_weight,
-			0.0
+		var score: float = maxf(attack.ai_weight, 0.05)
+		var total_commitment: float = (
+			attack.charge_time
+			+ attack.windup_time
+			+ attack.recovery_time
 		)
 
 
-		if roll <= 0.0:
-
-			return attack
+		score -= total_commitment * 0.18
 
 
-	return candidates[
-		candidates.size() - 1
-	]
+		match attack.attack_kind:
+
+			AttackData.AttackKind.PRIMARY:
+				score += 0.28
+
+			AttackData.AttackKind.HEAVY:
+				score += ai_profile.aggression * 0.12
+
+			AttackData.AttackKind.CHARGED:
+				score -= 0.35
+
+
+				if target_is_committed:
+
+					score += 0.8
+
+
+		if enemy_data.uses_stamina:
+
+			var remaining_stamina_ratio: float = (
+				(stamina - attack.stamina_cost)
+				/ maxf(enemy_data.max_stamina, 1.0)
+			)
+			score += clampf(
+				remaining_stamina_ratio,
+				0.0,
+				1.0
+			) * 0.2
+
+
+		# Variación pequeña: evita secuencias perfectamente
+		# deterministas sin destruir la intención táctica.
+		score += randf_range(-0.06, 0.06)
+
+
+		if score > best_score:
+
+			best_score = score
+			best_attack = attack
+
+
+	return best_attack
 
 
 # =========================================================
@@ -1060,6 +1388,7 @@ func _start_attack(
 
 
 	current_attack_phase = "windup"
+	_play_action_animation("attack")
 
 
 	current_attack_phase_time_left = maxf(
@@ -1078,8 +1407,13 @@ func _start_attack(
 
 		print(
 			enemy_data.enemy_name,
+			" [",
+			name,
+			"]",
 			" PREPARA ",
 			attack.attack_name,
+			" | Rol: ",
+			ai_role,
 			" | Stamina: ",
 			stamina,
 			" / ",
@@ -1301,6 +1635,7 @@ func _finish_current_attack() -> void:
 	current_attack_phase = ""
 
 	current_attack_phase_time_left = 0.0
+	_play_idle()
 
 
 	if debug_combat:
@@ -1892,6 +2227,9 @@ func _move_toward_position(
 	)
 
 
+	_play_action_animation("walk")
+
+
 # =========================================================
 # ORIENTACIÓN
 # =========================================================
@@ -1919,7 +2257,17 @@ func _update_facing(
 	)
 
 
-	_play_idle()
+	if current_attack != null:
+
+		_play_action_animation("attack")
+
+	elif wants_navigation_movement:
+
+		_play_action_animation("walk")
+
+	else:
+
+		_play_idle()
 
 
 # =========================================================
@@ -2085,6 +2433,58 @@ func _play_idle() -> void:
 		enemy_animated.play(
 			fallback_animation_name
 		)
+
+
+func _setup_action_animations() -> void:
+
+	if enemy_animated == null or enemy_animated.sprite_frames == null:
+
+		return
+
+
+	# Por ahora Goblin es el único arquetipo visual. Cuando aparezcan
+	# enemigos nuevos, estas hojas pasarán a EnemyData por especie.
+	if enemy_data == null or enemy_data.enemy_name != "Goblin":
+
+		return
+
+
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		enemy_animated.sprite_frames,
+		GOBLIN_WALK_SHEET,
+		"walk",
+		8.0,
+		true
+	)
+	SpriteSheetAnimationBuilder.add_cardinal_sheet(
+		enemy_animated.sprite_frames,
+		GOBLIN_ATTACK_SHEET,
+		"attack",
+		12.0,
+		false
+	)
+
+
+func _play_action_animation(animation_prefix: String) -> void:
+
+	if enemy_animated == null or enemy_animated.sprite_frames == null:
+
+		return
+
+
+	var animation_name: StringName = StringName(
+		animation_prefix + "_" + last_cardinal_facing
+	)
+
+
+	if not enemy_animated.sprite_frames.has_animation(animation_name):
+
+		return
+
+
+	if enemy_animated.animation != animation_name:
+
+		enemy_animated.play(animation_name)
 
 
 # =========================================================
@@ -2492,10 +2892,9 @@ func is_combat_active() -> bool:
 
 
 	return (
-		global_position.distance_to(
-			player.global_position
-		)
-		<= enemy_data.detection_range
+		perception != null
+		and
+		perception.is_aware
 	)
 
 
@@ -2624,9 +3023,14 @@ func _stop_navigation() -> void:
 
 	if navigation_agent != null:
 
-		navigation_agent.velocity = (
-			Vector2.ZERO
-		)
+			navigation_agent.velocity = (
+				Vector2.ZERO
+			)
+
+
+	if current_attack == null:
+
+		_play_idle()
 
 
 # =========================================================
@@ -2674,6 +3078,16 @@ func take_damage(
 	if health <= 0:
 
 		return
+
+
+	if perception != null:
+
+		perception.notice_position(attacker_position)
+
+
+	if utility_brain != null:
+
+		utility_brain.interrupt_commitment()
 
 
 	health -= amount
@@ -2963,6 +3377,13 @@ func is_enemy_alive() -> bool:
 
 func die() -> void:
 
+	if is_dying:
+
+		return
+
+
+	is_dying = true
+
 	print(
 		enemy_data.enemy_name,
 		" DERROTADO"
@@ -2970,6 +3391,12 @@ func die() -> void:
 
 
 	_cancel_current_attack()
+
+
+	defeated.emit(self)
+
+
+	_drop_loot()
 
 
 	wants_navigation_movement = false
@@ -2997,6 +3424,63 @@ func die() -> void:
 	queue_free()
 
 
+func _drop_loot() -> void:
+
+	if enemy_data == null or enemy_data.loot_table.is_empty():
+
+		return
+
+
+	var pickup_scene: PackedScene = preload(
+		"res://scenes/items/item_pickup.tscn"
+	)
+	var drop_index: int = 0
+
+
+	for loot_entry: LootEntry in enemy_data.loot_table:
+
+		if loot_entry == null:
+
+			continue
+
+
+		var rolled_quantity: int = loot_entry.roll_quantity(
+			loot_random
+		)
+
+
+		if rolled_quantity <= 0:
+
+			continue
+
+
+		var pickup: ItemPickup = pickup_scene.instantiate()
+		pickup.item_data = loot_entry.item
+		pickup.quantity = rolled_quantity
+
+
+		var drop_parent: Node = get_parent()
+
+
+		if drop_parent == null:
+
+			continue
+
+
+		drop_parent.add_child(pickup)
+
+
+		var angle: float = (
+			TAU * float(drop_index) / 5.0
+			+ loot_random.randf_range(-0.35, 0.35)
+		)
+		var distance: float = loot_random.randf_range(18.0, 34.0)
+		pickup.global_position = global_position + Vector2.from_angle(
+			angle
+		) * distance
+		drop_index += 1
+
+
 # =========================================================
 # DEBUG
 # =========================================================
@@ -3018,6 +3502,9 @@ func _draw() -> void:
 	):
 
 		return
+
+
+	_draw_perception_debug()
 
 
 	var player_local: Vector2 = (
@@ -3133,6 +3620,84 @@ func _draw() -> void:
 		attack_to_draw,
 		direction_to_draw
 	)
+
+
+func _draw_perception_debug() -> void:
+
+	if ai_profile == null or perception == null:
+
+		return
+
+
+	var perception_color: Color = Color(
+		0.25,
+		0.75,
+		1.0,
+		0.45
+	)
+
+
+	if perception.has_line_of_sight:
+
+		perception_color = Color(1.0, 0.2, 0.15, 0.8)
+
+	elif perception.heard_target:
+
+		perception_color = Color(1.0, 0.85, 0.2, 0.7)
+
+
+	var facing_angle: float = (
+		_get_perception_facing_direction().angle()
+	)
+	var half_view_angle: float = deg_to_rad(
+		ai_profile.vision_angle_degrees * 0.5
+	)
+
+
+	draw_arc(
+		Vector2.ZERO,
+		ai_profile.vision_range,
+		facing_angle - half_view_angle,
+		facing_angle + half_view_angle,
+		48,
+		perception_color,
+		1.0,
+		true
+	)
+
+
+	draw_arc(
+		Vector2.ZERO,
+		ai_profile.hearing_range,
+		0.0,
+		TAU,
+		40,
+		Color(1.0, 0.8, 0.2, 0.22),
+		1.0,
+		true
+	)
+
+
+	if perception.is_aware and not perception.has_line_of_sight:
+
+		var memory_local: Vector2 = to_local(
+			perception.last_known_position
+		)
+
+
+		draw_line(
+			Vector2.ZERO,
+			memory_local,
+			Color(0.7, 0.35, 1.0, 0.7),
+			2.0
+		)
+		draw_circle(
+			memory_local,
+			7.0,
+			Color(0.7, 0.35, 1.0, 0.85),
+			false,
+			2.0
+		)
 
 
 # =========================================================

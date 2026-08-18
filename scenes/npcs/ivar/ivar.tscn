@@ -1,0 +1,45 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/tutorial_npc.gd" id="1_npc"]
+[ext_resource type="Texture2D" path="res://assets/characters/npcs/ivar/ivar_idle.png" id="2_ivar"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_interaction"]
+radius = 68.0
+
+[node name="Ivar" type="Area2D"]
+script = ExtResource("1_npc")
+
+[node name="CharacterSprite" type="Sprite2D" parent="."]
+position = Vector2(0, -84)
+scale = Vector2(0.11, 0.11)
+texture = ExtResource("2_ivar")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -12)
+shape = SubResource("CircleShape2D_interaction")
+
+[node name="QuestMarker" type="Label" parent="."]
+z_index = 100
+offset_left = -28.0
+offset_top = -190.0
+offset_right = 28.0
+offset_bottom = -134.0
+theme_override_colors/font_color = Color(1, 0.78, 0.18, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.045, 0.02, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 38
+text = "!"
+horizontal_alignment = 1
+
+[node name="InteractionPrompt" type="Label" parent="."]
+z_index = 101
+offset_left = -90.0
+offset_top = -142.0
+offset_right = 90.0
+offset_bottom = -110.0
+theme_override_colors/font_color = Color(1, 0.93, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0.04, 0.025, 0.015, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 17
+text = "[F] Hablar con Ivar"
+horizontal_alignment = 1

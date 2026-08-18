@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemData" format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/stalker_boots.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_item")
+item_id = &"stalker_boots"
+display_name = "Botas de acechador"
+description = "Calzado flexible diseñado para moverse con rapidez y en silencio."
+item_type = 1
+rarity = 2
+icon = ExtResource("2_icon")
+equipment_slot = 2
+dexterity_bonus = 2
+endurance_bonus = 2
