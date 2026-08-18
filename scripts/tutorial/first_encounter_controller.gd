@@ -55,7 +55,6 @@ func _initialize() -> void:
 	camera.limit_top = 100
 	camera.limit_right = 3900
 	camera.limit_bottom = 1500
-	_disable_combat_debug()
 	for node: Node in get_tree().get_nodes_in_group("enemies"):
 		var enemy := node as Enemy
 		if enemy == null:
@@ -63,6 +62,7 @@ func _initialize() -> void:
 		goblins.append(enemy)
 		enemy.process_mode = Node.PROCESS_MODE_DISABLED
 		enemy.defeated.connect(_on_goblin_defeated)
+	_disable_combat_debug()
 	for node: Node in get_tree().get_nodes_in_group("tutorial_gatherables"):
 		var gatherable := node as GatherableResource
 		if gatherable != null:
@@ -91,6 +91,10 @@ func _disable_combat_debug() -> void:
 	for enemy: Enemy in goblins:
 		enemy.debug_combat = false
 		enemy.debug_ai_scores = false
+		enemy.queue_redraw()
+		var debug_label := enemy.get_node_or_null("AIDebugLabel") as Label
+		if debug_label != null:
+			debug_label.visible = false
 
 
 func _set_only_active_npc(active_npc: TutorialNPC) -> void:

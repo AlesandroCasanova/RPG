@@ -3,6 +3,10 @@ extends CanvasLayer
 
 
 const WORLD_BOUNDS: Rect2 = Rect2(100, 100, 3800, 1400)
+const MINI_VIEW_SIZE := Vector2i(220, 160)
+const FULL_VIEW_SIZE := Vector2i(960, 360)
+const MINI_WORLD_ZOOM := 0.18
+const FULL_WORLD_ZOOM := 0.25
 
 var world_bounds: Rect2 = WORLD_BOUNDS
 var player: Node2D
@@ -10,6 +14,12 @@ var mini_panel: PanelContainer
 var full_overlay: ColorRect
 var mini_canvas: WorldMapCanvas
 var full_canvas: WorldMapCanvas
+var mini_world_view: TextureRect
+var full_world_view: TextureRect
+var mini_viewport: SubViewport
+var full_viewport: SubViewport
+var mini_camera: Camera2D
+var full_camera: Camera2D
 var full_title: Label
 var map_open: bool = false
 var quest_position: Vector2 = Vector2.ZERO
@@ -37,18 +47,23 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 30
 	mini_panel = $MiniPanel
-	mini_canvas = $MiniPanel/MiniCanvas
+	mini_canvas = $MiniPanel/MiniCanvas/Markers
+	mini_world_view = $MiniPanel/MiniCanvas/MiniWorldView
 	full_overlay = $FullOverlay
-	full_canvas = $FullOverlay/FullPanel/Content/FullCanvas
+	full_canvas = $FullOverlay/FullPanel/Content/FullCanvas/Markers
+	full_world_view = $FullOverlay/FullPanel/Content/FullCanvas/FullWorldView
 	full_title = $FullOverlay/FullPanel/Content/FullTitle
 	mini_canvas.map_owner = self
 	full_canvas.map_owner = self
+	_create_world_viewports()
 	call_deferred("_find_player")
 
 
 func _process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
+	if is_instance_valid(mini_camera):
+		mini_camera.global_position = player.global_position
 	for location_id: StringName in locations:
 		var location: Dictionary = locations[location_id]
 		if not bool(location["discovered"]) and player.global_position.distance_to(location["position"]) < 220.0:
@@ -84,10 +99,52 @@ func discover_location(location_id: StringName) -> void:
 
 func _find_player() -> void:
 	player = get_tree().get_first_node_in_group("player") as Node2D
+	if is_instance_valid(player) and is_instance_valid(mini_camera):
+		mini_camera.global_position = player.global_position
+
+
+func _create_world_viewports() -> void:
+	mini_viewport = _create_world_viewport("MiniMapViewport", MINI_VIEW_SIZE, MINI_WORLD_ZOOM)
+	mini_camera = mini_viewport.get_node("MapCamera") as Camera2D
+	mini_world_view.texture = mini_viewport.get_texture()
+	mini_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	full_viewport = _create_world_viewport("FullMapViewport", FULL_VIEW_SIZE, FULL_WORLD_ZOOM)
+	full_camera = full_viewport.get_node("MapCamera") as Camera2D
+	full_camera.global_position = world_bounds.get_center()
+	full_world_view.texture = full_viewport.get_texture()
+	full_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
+func _create_world_viewport(viewport_name: String, viewport_size: Vector2i, camera_zoom: float) -> SubViewport:
+	var map_viewport := SubViewport.new()
+	map_viewport.name = viewport_name
+	map_viewport.size = viewport_size
+	map_viewport.disable_3d = true
+	map_viewport.transparent_bg = false
+	map_viewport.handle_input_locally = false
+	add_child(map_viewport)
+	map_viewport.world_2d = get_viewport().world_2d
+	var camera := Camera2D.new()
+	camera.name = "MapCamera"
+	camera.zoom = Vector2(camera_zoom, camera_zoom)
+	camera.position_smoothing_enabled = false
+	map_viewport.add_child(camera)
+	camera.enabled = true
+	return map_viewport
+
+
+func world_to_map_position(world_position: Vector2, canvas_size: Vector2, compact: bool) -> Vector2:
+	if compact and is_instance_valid(player):
+		return canvas_size * 0.5 + (world_position - player.global_position) * MINI_WORLD_ZOOM
+	return canvas_size * 0.5 + (world_position - world_bounds.get_center()) * FULL_WORLD_ZOOM
 
 
 func _toggle_full_map() -> void:
 	map_open = not map_open
 	full_overlay.visible = map_open
 	mini_panel.visible = not map_open
+	if map_open and is_instance_valid(full_viewport):
+		full_camera.global_position = world_bounds.get_center()
+		full_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	get_tree().paused = map_open

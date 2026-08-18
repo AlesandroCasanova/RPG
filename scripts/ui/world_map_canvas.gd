@@ -13,30 +13,10 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	if map_owner == null:
 		return
-	var inner := Rect2(Vector2(10, 10), size - Vector2(20, 20))
-	draw_rect(inner, Color(0.12, 0.105, 0.07, 1.0), true)
-	if not compact:
-		_draw_regions(inner)
-	_draw_roads(inner)
+	var inner := Rect2(Vector2.ZERO, size)
 	_draw_locations(inner)
 	_draw_quest_marker(inner)
 	_draw_player(inner)
-
-
-func _draw_regions(inner: Rect2) -> void:
-	draw_circle(_world_to_map(Vector2(1000, 570), inner), 84.0, Color(0.2, 0.32, 0.17, 0.42))
-	draw_circle(_world_to_map(Vector2(1980, 830), inner), 96.0, Color(0.26, 0.31, 0.16, 0.4))
-	draw_circle(_world_to_map(Vector2(3220, 760), inner), 82.0, Color(0.28, 0.18, 0.15, 0.4))
-	draw_circle(_world_to_map(Vector2(3500, 720), inner), 68.0, Color(0.18, 0.22, 0.19, 0.4))
-	draw_circle(_world_to_map(Vector2(3720, 1240), inner), 58.0, Color(0.31, 0.08, 0.16, 0.42))
-
-
-func _draw_roads(inner: Rect2) -> void:
-	var points := PackedVector2Array()
-	for world_point: Vector2 in map_owner.road_points:
-		points.append(_world_to_map(world_point, inner))
-	if points.size() >= 2:
-		draw_polyline(points, Color(0.49, 0.37, 0.21, 0.9), 3.0 if compact else 8.0, true)
 
 
 func _draw_locations(inner: Rect2) -> void:
@@ -71,10 +51,4 @@ func _draw_player(inner: Rect2) -> void:
 
 
 func _world_to_map(world_position: Vector2, inner: Rect2) -> Vector2:
-	if compact and is_instance_valid(map_owner.player):
-		return inner.get_center() + (world_position - map_owner.player.global_position) * 0.12
-	var normalized := Vector2(
-		(world_position.x - map_owner.world_bounds.position.x) / map_owner.world_bounds.size.x,
-		(world_position.y - map_owner.world_bounds.position.y) / map_owner.world_bounds.size.y
-	)
-	return inner.position + normalized * inner.size
+	return inner.position + map_owner.world_to_map_position(world_position, inner.size, compact)
