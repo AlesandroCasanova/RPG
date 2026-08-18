@@ -106,92 +106,430 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var role := StringName(context.get("role", &"support"))
 	var target_action := StringName(context.get("target_action", &"none"))
 	var target_phase := StringName(context.get("target_phase", &"none"))
-	var reads_telegraphs := profile.is_capability_enabled(EnemyAIProfile.CAP_READ_TELEGRAPHS)
+
+	var reads_telegraphs := profile.is_capability_enabled(
+		EnemyAIProfile.CAP_READ_TELEGRAPHS
+	)
+	var adapts := profile.is_capability_enabled(
+		EnemyAIProfile.CAP_ADAPT_ATTACKS
+	)
+
 	var target_charging := reads_telegraphs and target_action == &"charge"
-	var target_telegraphing := reads_telegraphs and (target_charging or target_phase == &"telegraph")
+	var target_telegraphing := (
+		reads_telegraphs
+		and (
+			target_charging
+			or target_phase == &"telegraph"
+		)
+	)
 	var target_recovering := target_phase == &"recovery"
-	var can_pursue_memory := profile.is_capability_enabled(EnemyAIProfile.CAP_SEARCH)
-	var inside_target_threat := bool(context.get("inside_target_threat", false))
-	var target_facing_me := bool(context.get("target_facing_me", false))
-	var cover_available := bool(context.get("cover_available", false))
-	var dash_ready := bool(context.get("dash_ready", false))
-	var interrupt_reaches := bool(context.get("interrupt_reaches", false))
+	var can_pursue_memory := profile.is_capability_enabled(
+		EnemyAIProfile.CAP_SEARCH
+	)
+
+	var inside_target_threat := bool(
+		context.get("inside_target_threat", false)
+	)
+	var target_facing_me := bool(
+		context.get("target_facing_me", false)
+	)
+	var cover_available := bool(
+		context.get("cover_available", false)
+	)
+	var dash_ready := bool(
+		context.get("dash_ready", false)
+	)
+	var interrupt_reaches := bool(
+		context.get("interrupt_reaches", false)
+	)
+
+	# -----------------------------------------------------
+	# MEMORIA ADAPTATIVA
+	# -----------------------------------------------------
+	# Estos datos no son "lectura de inputs". Llegan de patrones que el enemigo
+	# fue acumulando a partir de observaciones visuales y resultados de combate.
+	var adaptive_confidence := clampf(
+		float(context.get("adaptive_confidence", 0.0)),
+		0.0,
+		1.0
+	)
+	var adaptive_weight := (
+		profile.get_adaptive_influence()
+		* adaptive_confidence
+		if adapts
+		else 0.0
+	)
+
+	var player_attack_pressure := clampf(
+		float(context.get("player_attack_pressure", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_charge_tendency := clampf(
+		float(context.get("player_charge_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_dash_tendency := clampf(
+		float(context.get("player_dash_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_recovery_exposure := clampf(
+		float(context.get("player_recovery_exposure", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_approach_tendency := clampf(
+		float(context.get("player_approach_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_retreat_tendency := clampf(
+		float(context.get("player_retreat_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_lateral_tendency := clampf(
+		float(context.get("player_lateral_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_repeat_tendency := clampf(
+		float(context.get("player_repeat_tendency", 0.0)),
+		0.0,
+		1.0
+	)
+	var player_punishes_windup := clampf(
+		float(context.get("player_punishes_windup", 0.0)),
+		0.0,
+		1.0
+	)
+
 	var low_health_pressure := clampf(
 		(profile.retreat_health_ratio - health_ratio)
 		/ maxf(profile.retreat_health_ratio, 0.01),
 		0.0,
 		1.0
 	)
-	var danger_cue := 1.0 if visible and target_telegraphing and target_facing_me else 0.0
+
+	var danger_cue := (
+		1.0
+		if (
+			visible
+			and target_telegraphing
+			and target_facing_me
+		)
+		else 0.0
+	)
+
 	var scores: Dictionary = {}
 
-	var attack_is_valid := visible and can_attack and attack_reaches and cooldown_ready
+	# -----------------------------------------------------
+	# ATTACK
+	# -----------------------------------------------------
+	var attack_is_valid := (
+		visible
+		and can_attack
+		and attack_reaches
+		and cooldown_ready
+	)
 	var attack_score := 0.0
+
 	if attack_is_valid:
 		attack_score = profile.attack_utility * profile.aggression
 		attack_score *= stamina_ratio * 0.45 + 0.55
-		attack_score *= 1.35 if target_recovering and profile.is_capability_enabled(EnemyAIProfile.CAP_ADAPT_ATTACKS) else 1.0
-		attack_score *= 0.28 if danger_cue > 0.0 and inside_target_threat else 1.0
+
+		if (
+			target_recovering
+			and adapts
+		):
+			attack_score *= 1.35
+
+		if danger_cue > 0.0 and inside_target_threat:
+			attack_score *= 0.28
+
+		if adaptive_weight > 0.0:
+			# Si el jugador expone recuperaciones a menudo, el enemigo aprende a
+			# capitalizar esas ventanas. Si presiona mucho y no está recuperando,
+			# se vuelve algo menos ansioso por iniciar un intercambio frontal.
+			attack_score *= (
+				1.0
+				+ adaptive_weight
+				* player_recovery_exposure
+				* 0.24
+			)
+
+			if not target_recovering:
+				attack_score *= (
+					1.0
+					- adaptive_weight
+					* player_attack_pressure
+					* 0.16
+				)
+
+			attack_score *= (
+				1.0
+				+ adaptive_weight
+				* player_retreat_tendency
+				* 0.10
+			)
+
 	scores[ACTION_ATTACK] = attack_score
 
+	# -----------------------------------------------------
+	# APPROACH
+	# -----------------------------------------------------
 	var approach_score := profile.approach_utility
-	approach_score *= 1.0 if aware and (visible or can_pursue_memory) else 0.0
-	approach_score *= clampf(distance / maxf(profile.preferred_distance, 1.0), 0.12, 2.1)
+	approach_score *= (
+		1.0
+		if aware and (visible or can_pursue_memory)
+		else 0.0
+	)
+	approach_score *= clampf(
+		distance / maxf(profile.preferred_distance, 1.0),
+		0.12,
+		2.1
+	)
 	approach_score *= 1.15 if role == &"pressure" else 0.72
-	approach_score *= 0.30 if danger_cue > 0.0 and inside_target_threat else 1.0
+
+	if danger_cue > 0.0 and inside_target_threat:
+		approach_score *= 0.30
+
+	if adaptive_weight > 0.0:
+		approach_score *= (
+			1.0
+			+ adaptive_weight
+			* player_retreat_tendency
+			* 0.32
+		)
+
+		if inside_target_threat:
+			approach_score *= (
+				1.0
+				- adaptive_weight
+				* player_attack_pressure
+				* 0.22
+			)
+
 	scores[ACTION_APPROACH] = approach_score
 
+	# -----------------------------------------------------
+	# HOLD / BAIT
+	# -----------------------------------------------------
 	var hold_score := profile.hold_utility * profile.patience
 	hold_score *= 1.25 if role in [&"support", &"waiting"] else 0.45
 	hold_score *= 1.0 if aware else 0.0
 	hold_score += (1.0 - stamina_ratio) * 0.4
+
+	if adaptive_weight > 0.0:
+		# Un jugador que entra mucho hacia el enemigo puede ser cebado: sostener
+		# la posición gana valor en lugar de perseguirlo todo el tiempo.
+		hold_score += (
+			adaptive_weight
+			* player_approach_tendency
+			* profile.patience
+			* 0.34
+		)
+		hold_score += (
+			adaptive_weight
+			* player_repeat_tendency
+			* 0.12
+		)
+
 	scores[ACTION_HOLD] = hold_score
 
+	# -----------------------------------------------------
+	# FLANK
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_FLANK):
 		var flank_score := profile.flank_utility * profile.teamwork
 		flank_score *= 1.35 if role == &"flank" else 0.18
 		flank_score *= 1.0 if aware and visible else 0.0
+
+		if adaptive_weight > 0.0:
+			flank_score *= (
+				1.0
+				+ adaptive_weight
+				* (
+					player_attack_pressure * 0.14
+					+ player_lateral_tendency * 0.12
+				)
+			)
+
 		scores[ACTION_FLANK] = flank_score
 
+	# -----------------------------------------------------
+	# RETREAT
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_FLEE):
-		var retreat_score := profile.retreat_utility * low_health_pressure * (3.0 - profile.courage)
+		var retreat_score := (
+			profile.retreat_utility
+			* low_health_pressure
+			* (3.0 - profile.courage)
+		)
+
 		retreat_score += (1.0 - stamina_ratio) * 0.26
 		retreat_score += danger_cue * 0.2
 		retreat_score *= 1.0 if aware else 0.0
+
+		if adaptive_weight > 0.0 and aware:
+			retreat_score += (
+				adaptive_weight
+				* player_attack_pressure
+				* (0.12 + (1.0 - stamina_ratio) * 0.22)
+			)
+
 		scores[ACTION_RETREAT] = retreat_score
 
+	# -----------------------------------------------------
+	# SEARCH
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_SEARCH):
-		var search_score := profile.search_utility * (1.0 if aware and not visible else 0.0)
+		var search_score := (
+			profile.search_utility
+			* (1.0 if aware and not visible else 0.0)
+		)
 		scores[ACTION_SEARCH] = search_score
 
+	# -----------------------------------------------------
+	# CIRCLE
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_CIRCLE):
-		var distance_fit := 1.0 - clampf(absf(distance - profile.circle_radius) / maxf(profile.circle_radius, 1.0), 0.0, 1.0)
-		var circle_score := profile.circle_utility * (0.45 + distance_fit * 0.55)
-		circle_score *= 1.2 if role in [&"flank", &"support"] else 0.55
+		var distance_fit := (
+			1.0
+			- clampf(
+				absf(distance - profile.circle_radius)
+				/ maxf(profile.circle_radius, 1.0),
+				0.0,
+				1.0
+			)
+		)
+
+		var circle_score := (
+			profile.circle_utility
+			* (0.45 + distance_fit * 0.55)
+		)
+
+		circle_score *= (
+			1.2
+			if role in [&"flank", &"support"]
+			else 0.55
+		)
 		circle_score *= 1.0 if visible else 0.0
+
+		if adaptive_weight > 0.0:
+			circle_score *= (
+				1.0
+				+ adaptive_weight
+				* (
+					player_attack_pressure * 0.26
+					+ player_dash_tendency * 0.15
+					+ player_approach_tendency * 0.12
+				)
+			)
+
 		scores[ACTION_CIRCLE] = circle_score
 
+	# -----------------------------------------------------
+	# COVER
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_COVER):
 		var cover_score := profile.cover_utility
-		cover_score *= 1.0 if cover_available and visible else 0.0
-		cover_score *= 0.35 + (1.0 - stamina_ratio) * 0.75 + low_health_pressure * 0.8 + danger_cue * 0.65
+		cover_score *= (
+			1.0
+			if cover_available and visible
+			else 0.0
+		)
+
+		cover_score *= (
+			0.35
+			+ (1.0 - stamina_ratio) * 0.75
+			+ low_health_pressure * 0.8
+			+ danger_cue * 0.65
+		)
+
+		if adaptive_weight > 0.0:
+			cover_score *= (
+				1.0
+				+ adaptive_weight
+				* (
+					player_attack_pressure * 0.22
+					+ player_charge_tendency * 0.25
+				)
+			)
+
 		scores[ACTION_COVER] = cover_score
 
+	# -----------------------------------------------------
+	# DODGE
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_DODGE):
 		var dodge_score := profile.dodge_utility * danger_cue
 		dodge_score *= 1.0 if inside_target_threat else 0.22
 		dodge_score *= 1.25 if dash_ready else 0.72
 		dodge_score *= stamina_ratio * 0.45 + 0.55
+
+		# La memoria solo refuerza una amenaza que está siendo observada ahora.
+		# Nunca genera una esquiva "psíquica" sin telegraph visible.
+		if adaptive_weight > 0.0 and danger_cue > 0.0:
+			dodge_score *= (
+				1.0
+				+ adaptive_weight
+				* (
+					player_charge_tendency * 0.30
+					+ player_repeat_tendency * 0.18
+				)
+			)
+
 		scores[ACTION_DODGE] = dodge_score
 
+	# -----------------------------------------------------
+	# INTERRUPT
+	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_INTERRUPT):
 		var interrupt_score := profile.interrupt_utility
-		interrupt_score *= 1.0 if visible and target_telegraphing and interrupt_reaches and cooldown_ready else 0.0
+		interrupt_score *= (
+			1.0
+			if (
+				visible
+				and target_telegraphing
+				and interrupt_reaches
+				and cooldown_ready
+			)
+			else 0.0
+		)
 		interrupt_score *= 1.25 if target_charging else 0.8
+
+		if adaptive_weight > 0.0 and interrupt_score > 0.0:
+			interrupt_score *= (
+				1.0
+				+ adaptive_weight
+				* (
+					player_charge_tendency * 0.34
+					+ player_repeat_tendency * 0.16
+				)
+			)
+
 		scores[ACTION_INTERRUPT] = interrupt_score
 
-	if current_action in scores and float(scores[current_action]) > 0.0:
-		scores[current_action] = float(scores[current_action]) + 0.08
+	# -----------------------------------------------------
+	# PERSISTENCIA
+	# -----------------------------------------------------
+	if (
+		current_action in scores
+		and float(scores[current_action]) > 0.0
+	):
+		var persistence_bonus := 0.08
+		persistence_bonus += (
+			adaptive_weight
+			* (0.04 + profile.patience * 0.03)
+		)
+		scores[current_action] = (
+			float(scores[current_action])
+			+ persistence_bonus
+		)
+
 	return scores
 
 

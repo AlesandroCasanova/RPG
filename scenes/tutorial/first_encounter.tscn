@@ -24,6 +24,9 @@
 
 [node name="Player" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="0" unique_id=1164395281]
 position = Vector2(1010, 545)
+character_name = "Jugador"
+speed = 200.0
+sprint_speed = 300.0
 
 [node name="FrontierEnvironment" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="1" unique_id=1970482520 instance=ExtResource("5_environment")]
 

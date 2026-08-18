@@ -142,6 +142,27 @@ var patience: float = 0.8
 var retreat_health_ratio: float = 0.25
 
 
+@export_category("Memoria adaptativa")
+
+@export_range(0.5, 30.0, 0.1)
+var adaptive_memory_half_life: float = 6.0
+
+@export_range(0.0, 2.0, 0.05)
+var adaptive_learning_strength: float = 1.0
+
+@export_range(0.0, 2.0, 0.05)
+var adaptive_influence: float = 0.70
+
+@export_range(1.0, 20.0, 0.5)
+var adaptive_evidence_at_zero: float = 8.0
+
+@export_range(1.0, 20.0, 0.5)
+var adaptive_evidence_at_hundred: float = 2.5
+
+@export_range(0.0, 2.0, 0.05)
+var attack_history_influence: float = 0.55
+
+
 @export_category("Posicionamiento tactico")
 
 @export_range(10.0, 1000.0, 1.0)
@@ -267,6 +288,42 @@ func get_memory_position_error() -> float:
 	return maxf(
 		lerpf(memory_position_error_at_zero, memory_position_error_at_hundred, skill)
 		* memory_error_multiplier,
+		0.0
+	)
+
+
+func get_combat_memory_half_life() -> float:
+	var skill := get_intelligence_ratio()
+	return maxf(
+		adaptive_memory_half_life * lerpf(0.70, 1.20, skill),
+		0.5
+	)
+
+
+func get_combat_learning_strength() -> float:
+	if not is_capability_enabled(CAP_ADAPT_ATTACKS):
+		return 0.0
+	var skill := pow(get_intelligence_ratio(), 0.80)
+	return maxf(
+		adaptive_learning_strength * lerpf(0.35, 1.0, skill),
+		0.0
+	)
+
+
+func get_pattern_evidence_required() -> float:
+	var skill := get_intelligence_ratio()
+	return maxf(
+		lerpf(adaptive_evidence_at_zero, adaptive_evidence_at_hundred, skill),
+		1.0
+	)
+
+
+func get_adaptive_influence() -> float:
+	if not is_capability_enabled(CAP_ADAPT_ATTACKS):
+		return 0.0
+	var skill := pow(get_intelligence_ratio(), 0.75)
+	return maxf(
+		adaptive_influence * lerpf(0.35, 1.0, skill),
 		0.0
 	)
 
