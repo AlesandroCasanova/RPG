@@ -3,6 +3,7 @@ extends CanvasLayer
 
 
 signal dialogue_finished
+signal dialogue_started
 
 
 var overlay: ColorRect
@@ -22,13 +23,33 @@ var active: bool = false
 var input_lock_time: float = 0.0
 
 var completion_callback: Callable
+var dialogue_entries: Array[Dictionary] = []
+var left_portrait: TextureRect
+var right_portrait: TextureRect
+var left_frame: PanelContainer
+var right_frame: PanelContainer
+
+const MAELA_PORTRAIT := preload("res://assets/characters/npcs/maela/maela_poor.png")
+const IVAR_PORTRAIT := preload("res://assets/characters/npcs/ivar/ivar_poor.png")
+const PLAYER_PORTRAIT := preload("res://assets/characters/player/sprites/idle/player_idle.png")
+const GOBLIN_SHEET := preload("res://assets/characters/enemies/goblin/sprites/idle/goblien_sheet_cardinal.png")
 
 
 func _ready() -> void:
 
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("dialogue_ui")
 	layer = 100
-	_build_interface()
+	overlay = $DialogueOverlay
+	speaker_label = $DialogueOverlay/Panel/Margin/Content/SpeakerLabel
+	body_label = $DialogueOverlay/Panel/Margin/Content/BodyLabel
+	hint_label = $DialogueOverlay/Panel/Margin/Content/HintLabel
+	left_frame = $DialogueOverlay/LeftPortraitFrame
+	right_frame = $DialogueOverlay/RightPortraitFrame
+	left_portrait = $DialogueOverlay/LeftPortraitFrame/Portrait
+	right_portrait = $DialogueOverlay/RightPortraitFrame/Portrait
+	left_frame.visible = false
+	right_frame.visible = false
 	overlay.visible = false
 
 
@@ -65,13 +86,37 @@ func show_dialogue(
 
 
 	lines = new_lines
+	dialogue_entries.clear()
+	for line: String in new_lines:
+		dialogue_entries.append({"speaker": speaker, "text": line, "side": _default_side(speaker)})
 	current_line = 0
 	completion_callback = on_complete
 	active = true
 	input_lock_time = 0.22
-	speaker_label.text = speaker
-	body_label.text = lines[0]
+	left_frame.visible = false
+	right_frame.visible = false
+	_show_entry(0)
 	overlay.visible = true
+	dialogue_started.emit()
+	get_tree().paused = true
+
+
+func show_cinematic_dialogue(new_entries: Array[Dictionary], on_complete: Callable = Callable()) -> void:
+	if new_entries.is_empty():
+		return
+	dialogue_entries = new_entries
+	lines.clear()
+	for entry: Dictionary in new_entries:
+		lines.append(String(entry.get("text", "")))
+	current_line = 0
+	completion_callback = on_complete
+	active = true
+	input_lock_time = 0.22
+	left_frame.visible = false
+	right_frame.visible = false
+	_show_entry(0)
+	overlay.visible = true
+	dialogue_started.emit()
 	get_tree().paused = true
 
 
@@ -87,7 +132,7 @@ func _advance() -> void:
 
 	if current_line < lines.size():
 
-		body_label.text = lines[current_line]
+		_show_entry(current_line)
 		return
 
 
@@ -102,80 +147,39 @@ func _advance() -> void:
 		completion_callback.call_deferred()
 
 
-func _build_interface() -> void:
-
-	overlay = ColorRect.new()
-	overlay.name = "DialogueOverlay"
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.015, 0.012, 0.01, 0.28)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(overlay)
-
-
-	var panel: PanelContainer = PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	panel.offset_left = -470.0
-	panel.offset_top = -230.0
-	panel.offset_right = 470.0
-	panel.offset_bottom = -36.0
-	panel.add_theme_stylebox_override("panel", _make_panel_style())
-	overlay.add_child(panel)
-
-
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 30)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_right", 30)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	panel.add_child(margin)
+func _show_entry(index: int) -> void:
+	var entry := dialogue_entries[index]
+	var speaker := String(entry.get("speaker", ""))
+	var side := String(entry.get("side", _default_side(speaker)))
+	speaker_label.text = speaker
+	body_label.text = String(entry.get("text", ""))
+	var portrait := entry.get("portrait") as Texture2D
+	if portrait == null:
+		portrait = _portrait_for(speaker)
+	if side == "left":
+		left_portrait.texture = portrait
+		left_frame.visible = portrait != null
+		left_frame.modulate = Color.WHITE
+		right_frame.modulate = Color(0.38, 0.38, 0.38, 0.78)
+	else:
+		right_portrait.texture = portrait
+		right_frame.visible = portrait != null
+		right_frame.modulate = Color.WHITE
+		left_frame.modulate = Color(0.38, 0.38, 0.38, 0.78)
 
 
-	var content: VBoxContainer = VBoxContainer.new()
-	content.add_theme_constant_override("separation", 10)
-	margin.add_child(content)
+func _default_side(speaker: String) -> String:
+	return "left" if speaker in ["El Ambicioso", "Protagonista"] else "right"
 
 
-	speaker_label = Label.new()
-	speaker_label.add_theme_font_size_override("font_size", 25)
-	speaker_label.add_theme_color_override(
-		"font_color",
-		Color(0.95, 0.72, 0.28, 1.0)
-	)
-	content.add_child(speaker_label)
-
-
-	body_label = Label.new()
-	body_label.custom_minimum_size = Vector2(0.0, 86.0)
-	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.add_theme_font_size_override("font_size", 19)
-	body_label.add_theme_color_override(
-		"font_color",
-		Color(0.93, 0.9, 0.82, 1.0)
-	)
-	content.add_child(body_label)
-
-
-	hint_label = Label.new()
-	hint_label.text = "F / ESPACIO  ·  continuar"
-	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hint_label.add_theme_font_size_override("font_size", 14)
-	hint_label.add_theme_color_override(
-		"font_color",
-		Color(0.65, 0.61, 0.53, 1.0)
-	)
-	content.add_child(hint_label)
-
-
-func _make_panel_style() -> StyleBoxFlat:
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.045, 0.035, 0.97)
-	style.border_color = Color(0.47, 0.32, 0.15, 1.0)
-	style.set_border_width_all(3)
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_left = 10
-	style.corner_radius_bottom_right = 10
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.65)
-	style.shadow_size = 12
-	return style
+func _portrait_for(speaker: String) -> Texture2D:
+	match speaker:
+		"Maela", "Nara": return MAELA_PORTRAIT
+		"Ivar": return IVAR_PORTRAIT
+		"El Ambicioso", "Protagonista": return PLAYER_PORTRAIT
+		"Goblin":
+			var atlas := AtlasTexture.new()
+			atlas.atlas = GOBLIN_SHEET
+			atlas.region = Rect2(3, 0, 191, 511)
+			return atlas
+	return null

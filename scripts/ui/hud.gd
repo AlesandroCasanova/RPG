@@ -29,12 +29,6 @@ var player: CharacterBody2D = null
 func _ready() -> void:
 	_find_player()
 
-	_style_health_bar()
-
-	_style_stamina_bar()
-
-	_style_mana_bar()
-
 
 # =========================================================
 # ACTUALIZAR HUD

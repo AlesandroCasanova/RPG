@@ -13,8 +13,14 @@ enum ItemType {
 enum EquipmentSlot {
 	NONE,
 	WEAPON,
-	ARMOR,
-	ACCESSORY
+	HEAD,
+	CHEST,
+	LEGS,
+	BOOTS,
+	GLOVES,
+	RING_LEFT,
+	RING_RIGHT,
+	AMULET
 }
 
 
@@ -23,6 +29,14 @@ enum Rarity {
 	UNCOMMON,
 	RARE,
 	EPIC
+}
+
+
+enum ConsumableEffect {
+	NONE,
+	HEALTH,
+	STAMINA,
+	MANA
 }
 
 
@@ -52,6 +66,14 @@ var max_stack: int = 1
 @export_category("Equipamiento")
 
 @export var equipment_slot: EquipmentSlot = EquipmentSlot.NONE
+
+
+@export_category("Consumible")
+
+@export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
+
+@export_range(0.0, 9999.0, 1.0)
+var effect_amount: float = 0.0
 
 
 @export_category("Atributos")
@@ -93,6 +115,61 @@ func get_rarity_color() -> Color:
 
 
 	return Color(0.9, 0.9, 0.9, 1.0)
+
+
+func get_rarity_name() -> String:
+	match rarity:
+		Rarity.UNCOMMON:
+			return "Poco común"
+		Rarity.RARE:
+			return "Raro"
+		Rarity.EPIC:
+			return "Épico"
+	return "Común"
+
+
+func get_type_name() -> String:
+	match item_type:
+		ItemType.CONSUMABLE:
+			return "Consumible"
+		ItemType.EQUIPMENT:
+			return "Equipamiento"
+		ItemType.QUEST:
+			return "Objeto de misión"
+	return "Material"
+
+
+func get_slot_name() -> String:
+	match equipment_slot:
+		EquipmentSlot.WEAPON: return "Arma"
+		EquipmentSlot.HEAD: return "Cabeza"
+		EquipmentSlot.CHEST: return "Pecho"
+		EquipmentSlot.LEGS: return "Piernas"
+		EquipmentSlot.BOOTS: return "Botas"
+		EquipmentSlot.GLOVES: return "Guantes"
+		EquipmentSlot.RING_LEFT: return "Anillo izquierdo"
+		EquipmentSlot.RING_RIGHT: return "Anillo derecho"
+		EquipmentSlot.AMULET: return "Amuleto"
+	return ""
+
+
+func get_detail_text() -> String:
+	var lines: PackedStringArray = [display_name]
+	lines.append(get_rarity_name() + " · " + get_type_name())
+	if is_equipment():
+		lines.append("Ranura: " + get_slot_name())
+	if not description.is_empty():
+		lines.append(description)
+	if item_type == ItemType.CONSUMABLE and effect_amount > 0.0:
+		var effect_name := "Vida"
+		if consumable_effect == ConsumableEffect.STAMINA:
+			effect_name = "Stamina"
+		elif consumable_effect == ConsumableEffect.MANA:
+			effect_name = "Maná"
+		lines.append(effect_name + " +" + str(roundi(effect_amount)))
+	if is_equipment():
+		lines.append(get_bonus_text())
+	return "\n".join(lines)
 
 
 func get_bonus_text() -> String:

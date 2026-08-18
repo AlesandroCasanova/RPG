@@ -1,0 +1,598 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/inventory_ui.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/inventory_frame.png" id="2_frame"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/equipment_body_silhouette.png" id="3_body"]
+[ext_resource type="PackedScene" path="res://scenes/ui/inventory_slot.tscn" id="4_slot"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/helmet_outline.svg" id="5_head"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/chest_outline.svg" id="6_chest"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/legs_outline.svg" id="7_legs"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/boots_outline.svg" id="8_boots"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/gloves_outline.svg" id="9_gloves"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/sword_outline.svg" id="10_sword"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/ring_left_outline.svg" id="11_ring_left"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/ring_right_outline.svg" id="12_ring_right"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/slots/amulet_outline.svg" id="13_amulet"]
+[ext_resource type="PackedScene" path="res://scenes/ui/quick_slot.tscn" id="14_quick"]
+
+[sub_resource type="StyleBoxFlat" id="InnerPanel"]
+bg_color = Color(0.026, 0.018, 0.012, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.34, 0.24, 0.14, 0.9)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+shadow_color = Color(0, 0, 0, 0.6)
+shadow_size = 4
+
+[sub_resource type="StyleBoxFlat" id="ActionNormal"]
+bg_color = Color(0.075, 0.047, 0.024, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.48, 0.33, 0.16, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="ActionHover"]
+bg_color = Color(0.16, 0.095, 0.035, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.82, 0.59, 0.25, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="ActionDisabled"]
+bg_color = Color(0.032, 0.024, 0.018, 0.78)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.16, 0.11, 0.7)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="InventoryUI" type="CanvasLayer"]
+script = ExtResource("1_script")
+
+[node name="InventoryRoot" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Backdrop" type="ColorRect" parent="InventoryRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.003, 0.004, 0.007, 0.96)
+
+[node name="Frame" type="TextureRect" parent="InventoryRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+texture = ExtResource("2_frame")
+expand_mode = 1
+
+[node name="Margin" type="MarginContainer" parent="InventoryRoot/Frame"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 82
+theme_override_constants/margin_top = 68
+theme_override_constants/margin_right = 82
+theme_override_constants/margin_bottom = 60
+
+[node name="Layout" type="VBoxContainer" parent="InventoryRoot/Frame/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="InventoryRoot/Frame/Margin/Layout"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.86, 0.7, 0.38, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 24
+text = "INVENTARIO DEL AMBICIOSO"
+
+[node name="PauseLabel" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.51, 0.41, 1)
+theme_override_font_sizes/font_size = 13
+text = "MUNDO EN PAUSA"
+vertical_alignment = 1
+
+[node name="CloseButton" type="Button" parent="InventoryRoot/Frame/Margin/Layout/Header"]
+custom_minimum_size = Vector2(110, 34)
+layout_mode = 2
+theme_override_styles/normal = SubResource("ActionNormal")
+theme_override_styles/hover = SubResource("ActionHover")
+theme_override_styles/pressed = SubResource("ActionHover")
+text = "Cerrar  [I]"
+
+[node name="Columns" type="HBoxContainer" parent="InventoryRoot/Frame/Margin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 18
+
+[node name="LootColumn" type="VBoxContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns"]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LootHeader" type="HBoxContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+layout_mode = 2
+[node name="LootTitle" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.82, 0.74, 0.61, 1)
+theme_override_font_sizes/font_size = 18
+text = "MOCHILA"
+[node name="CapacityLabel" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootHeader"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.52, 0.28, 1)
+text = "0 / 32"
+
+[node name="LootGrid" type="GridContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 5
+theme_override_constants/v_separation = 5
+columns = 4
+
+[node name="Slot01" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot02" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot03" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot04" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot05" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot06" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot07" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot08" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot09" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot10" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot11" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot12" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot13" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot14" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot15" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot16" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot17" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot18" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot19" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot20" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot21" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot22" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot23" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot24" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot25" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot26" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot27" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot28" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot29" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot30" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot31" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+[node name="Slot32" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/LootGrid" instance=ExtResource("4_slot")]
+
+[node name="DetailsPanel" type="PanelContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+custom_minimum_size = Vector2(0, 92)
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_styles/panel = SubResource("InnerPanel")
+
+[node name="DetailsScroll" type="ScrollContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/DetailsPanel"]
+custom_minimum_size = Vector2(0, 88)
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+
+[node name="DetailsLabel" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/DetailsPanel/DetailsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.77, 0.7, 0.59, 1)
+theme_override_font_sizes/font_size = 12
+text = "Seleccioná un objeto para consultar sus detalles."
+autowrap_mode = 3
+
+[node name="QuickAccessTitle" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.52, 0.28, 1)
+theme_override_font_sizes/font_size = 12
+text = "ACCESOS RÁPIDOS · ARRASTRÁ CONSUMIBLES"
+
+[node name="QuickAccessRow" type="HBoxContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Quick1" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+[node name="Quick2" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+[node name="Quick3" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+[node name="Quick4" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+[node name="Quick5" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+[node name="Quick6" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn/QuickAccessRow" instance=ExtResource("14_quick")]
+custom_minimum_size = Vector2(48, 46)
+
+[node name="EquipButton" type="Button" parent="InventoryRoot/Frame/Margin/Layout/Columns/LootColumn"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_styles/normal = SubResource("ActionNormal")
+theme_override_styles/hover = SubResource("ActionHover")
+theme_override_styles/pressed = SubResource("ActionHover")
+theme_override_styles/disabled = SubResource("ActionDisabled")
+disabled = true
+text = "EQUIPAR OBJETO SELECCIONADO"
+
+[node name="CharacterColumn" type="VBoxContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns"]
+custom_minimum_size = Vector2(510, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CharacterTitle" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.7, 0.38, 1)
+theme_override_font_sizes/font_size = 18
+text = "EL AMBICIOSO"
+horizontal_alignment = 1
+
+[node name="PreviewStage" type="Control" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn"]
+custom_minimum_size = Vector2(510, 420)
+layout_mode = 2
+
+[node name="PreviewGlow" type="ColorRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/PreviewStage"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -105.0
+offset_top = -155.0
+offset_right = 105.0
+offset_bottom = 155.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.12, 0.065, 0.025, 0.28)
+
+[node name="PlayerPreview" type="AnimatedSprite2D" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/PreviewStage"]
+position = Vector2(255, 215)
+scale = Vector2(0.9, 0.9)
+
+[node name="StatsPanel" type="PanelContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn"]
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+theme_override_styles/panel = SubResource("InnerPanel")
+[node name="StatsLabel" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/StatsPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.66, 0.38, 1)
+theme_override_font_sizes/font_size = 12
+text = "VIT 5   FUE 5   DES 5\nAGU 5   INT 5   VOL 5"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EquipmentColumn" type="VBoxContainer" parent="InventoryRoot/Frame/Margin/Layout/Columns"]
+custom_minimum_size = Vector2(490, 0)
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="EquipmentTitle" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.74, 0.61, 1)
+theme_override_font_sizes/font_size = 18
+text = "EQUIPAMIENTO"
+horizontal_alignment = 1
+
+[node name="EquipmentStage" type="Control" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn"]
+custom_minimum_size = Vector2(490, 430)
+layout_mode = 2
+
+[node name="BodySilhouette" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage"]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -74.0
+offset_top = 8.0
+offset_right = 74.0
+offset_bottom = 390.0
+grow_horizontal = 2
+mouse_filter = 2
+modulate = Color(0.68, 0.59, 0.48, 0.48)
+texture = ExtResource("3_body")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HeadSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -38.0
+offset_top = 8.0
+offset_right = 38.0
+offset_bottom = 58.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/HeadSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 7.0
+offset_top = 3.0
+offset_right = -7.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_head")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ChestSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -38.0
+offset_top = 94.0
+offset_right = 38.0
+offset_bottom = 146.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/ChestSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 3.0
+offset_right = -6.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6_chest")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="LegsSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -38.0
+offset_top = 202.0
+offset_right = 38.0
+offset_bottom = 254.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/LegsSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 3.0
+offset_right = -8.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("7_legs")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="BootsSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -38.0
+offset_top = 330.0
+offset_right = 38.0
+offset_bottom = 382.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/BootsSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 7.0
+offset_top = 3.0
+offset_right = -7.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("8_boots")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="GlovesSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -172.0
+offset_top = 130.0
+offset_right = -88.0
+offset_bottom = 182.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/GlovesSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 3.0
+offset_right = -8.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("9_gloves")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="WeaponSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -172.0
+offset_top = 252.0
+offset_right = -88.0
+offset_bottom = 306.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/WeaponSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 9.0
+offset_top = 3.0
+offset_right = -9.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("10_sword")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="AmuletSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = 88.0
+offset_top = 68.0
+offset_right = 172.0
+offset_bottom = 120.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/AmuletSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 3.0
+offset_right = -10.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("13_amulet")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="RingLeftSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = 88.0
+offset_top = 148.0
+offset_right = 172.0
+offset_bottom = 200.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/RingLeftSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 9.0
+offset_top = 5.0
+offset_right = -9.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("11_ring_left")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="RingRightSlot" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage" instance=ExtResource("4_slot")]
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = 88.0
+offset_top = 208.0
+offset_right = 172.0
+offset_bottom = 260.0
+grow_horizontal = 2
+toggle_mode = false
+
+[node name="Placeholder" type="TextureRect" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn/EquipmentStage/RingRightSlot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 9.0
+offset_top = 5.0
+offset_right = -9.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("12_ring_right")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="EquipmentHint" type="Label" parent="InventoryRoot/Frame/Margin/Layout/Columns/EquipmentColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.47, 0.36, 1)
+theme_override_font_sizes/font_size = 11
+text = "Seleccioná un objeto y pulsá EQUIPAR. Clic en una ranura para quitarlo."
+horizontal_alignment = 1
+autowrap_mode = 3

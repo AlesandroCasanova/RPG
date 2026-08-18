@@ -1,0 +1,31 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource type="Script" path="res://scripts/items/gatherable_resource.gd" id="1"]
+[sub_resource type="CircleShape2D" id="Shape"]
+radius = 52.0
+[node name="GatherableResource" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1")
+[node name="Icon" type="Sprite2D" parent="."]
+position = Vector2(0, -22)
+scale = Vector2(0.75, 0.75)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape")
+[node name="Marker" type="Node2D" parent="."]
+position = Vector2(0, -58)
+[node name="Glow" type="Polygon2D" parent="Marker"]
+color = Color(0.94, 0.76, 0.22, 0.35)
+polygon = PackedVector2Array(0, -18, 6, -6, 18, 0, 6, 6, 0, 18, -6, 6, -18, 0, -6, -6)
+[node name="Core" type="Polygon2D" parent="Marker"]
+color = Color(1, 0.86, 0.35, 1)
+polygon = PackedVector2Array(0, -9, 4, -3, 9, 0, 4, 3, 0, 9, -4, 3, -9, 0, -4, -3)
+[node name="Prompt" type="Label" parent="."]
+offset_left = -95.0
+offset_top = -100.0
+offset_right = 95.0
+offset_bottom = -73.0
+theme_override_colors/font_color = Color(1, 0.9, 0.55, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.03, 0.01, 1)
+theme_override_constants/outline_size = 5
+text = "[F] Recolectar"
+horizontal_alignment = 1

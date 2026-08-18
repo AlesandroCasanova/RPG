@@ -1,6 +1,75 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/quest_tracker.gd" id="1_quest"]
 
+[sub_resource type="StyleBoxFlat" id="QuestPanelStyle"]
+bg_color = Color(0.04, 0.035, 0.028, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.36, 0.28, 0.16, 0.95)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
 [node name="QuestTracker" type="CanvasLayer"]
 script = ExtResource("1_quest")
+
+[node name="QuestPanel" type="PanelContainer" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -370.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 146.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("QuestPanelStyle")
+
+[node name="Margin" type="MarginContainer" parent="QuestPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="QuestPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="TitleLabel" type="Label" parent="QuestPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.75, 0.32, 1)
+theme_override_font_sizes/font_size = 18
+text = "MISIÓN ACTIVA"
+
+[node name="ObjectiveLabel" type="Label" parent="QuestPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.87, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+text = "El objetivo actual aparecerá aquí."
+autowrap_mode = 3
+
+[node name="StateLabel" type="Label" parent="QuestPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.68, 0.55, 1)
+theme_override_font_sizes/font_size = 12
+text = "ESTADO DE LA MISIÓN"
+
+[node name="NotificationLabel" type="Label" parent="."]
+visible = false
+custom_minimum_size = Vector2(600, 48)
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = -300.0
+offset_top = 128.0
+offset_right = 300.0
+offset_bottom = 176.0
+grow_horizontal = 2
+theme_override_colors/font_outline_color = Color(0.03, 0.02, 0.01, 1)
+theme_override_constants/outline_size = 7
+theme_override_font_sizes/font_size = 22
+text = "Nueva ubicación descubierta"
+horizontal_alignment = 1

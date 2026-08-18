@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/clouded_mana_vial.svg" id="2"]
+
+[resource]
+script = ExtResource("1")
+item_id = &"clouded_mana_vial"
+display_name = "Vial de maná turbio"
+description = "Residuo mágico filtrado con carbón. Los magos lo despreciarían; acá puede salvar una vida."
+item_type = 0
+rarity = 0
+icon = ExtResource("2")
+stackable = true
+max_stack = 10
+consumable_effect = 3
+effect_amount = 30.0

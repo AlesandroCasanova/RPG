@@ -10,3 +10,19 @@ script = ExtResource("1_pickup")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_pickup")
+
+[node name="ItemSprite" type="Sprite2D" parent="."]
+z_index = 10
+position = Vector2(0, -4)
+
+[node name="ItemLabel" type="Label" parent="."]
+z_index = 50
+offset_left = -80.0
+offset_top = -48.0
+offset_right = 80.0
+offset_bottom = -20.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 13
+text = "Objeto para recoger"
+horizontal_alignment = 1

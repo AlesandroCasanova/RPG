@@ -2737,6 +2737,27 @@ func take_damage(
 	_flash_player_damage()
 
 
+func apply_consumable(item: ItemData) -> bool:
+	if item == null or item.item_type != ItemData.ItemType.CONSUMABLE:
+		return false
+	match item.consumable_effect:
+		ItemData.ConsumableEffect.HEALTH:
+			if health >= max_health:
+				return false
+			health = mini(max_health, health + roundi(item.effect_amount))
+		ItemData.ConsumableEffect.STAMINA:
+			if stamina >= max_stamina:
+				return false
+			stamina = minf(max_stamina, stamina + item.effect_amount)
+		ItemData.ConsumableEffect.MANA:
+			if mana >= max_mana:
+				return false
+			mana = minf(max_mana, mana + item.effect_amount)
+		_:
+			return false
+	return true
+
+
 # =========================================================
 # OBTENER KNOCKBACK EFECTIVO
 # =========================================================

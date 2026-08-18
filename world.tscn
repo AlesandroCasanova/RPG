@@ -8,13 +8,63 @@
 [ext_resource type="Texture2D" uid="uid://hi5u5y512nnu" path="res://assets/characters/player/sprites/idle/player_idle_diagonal.png" id="4_036b0"]
 [ext_resource type="Script" uid="uid://bkleq6luic3go" path="res://scripts/ui/hud.gd" id="7_pkg7o"]
 [ext_resource type="PackedScene" uid="uid://e81fugeluhil" path="res://scenes/enemies/goblin/goblin.tscn" id="9_ioo17"]
-[ext_resource type="Script" path="res://scripts/items/player_inventory.gd" id="10_inventory"]
-[ext_resource type="Script" path="res://scripts/ui/inventory_ui.gd" id="11_inventory_ui"]
+[ext_resource type="Script" uid="uid://2jh31wwamtji" path="res://scripts/items/player_inventory.gd" id="10_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/inventory_ui.tscn" id="11_inventory_ui"]
 [ext_resource type="PackedScene" path="res://scenes/items/item_pickup.tscn" id="12_pickup"]
 [ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="13_sword"]
 [ext_resource type="Resource" path="res://data/items/equipment/stalker_boots.tres" id="14_boots"]
 [ext_resource type="Resource" path="res://data/items/equipment/iron_charm.tres" id="15_charm"]
 [ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="16_shard"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/vitals_frame_compact.png" id="17_hud_frame"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hotbar_ui.tscn" id="18_hotbar"]
+
+[sub_resource type="StyleBoxFlat" id="VitalsBarBackground"]
+bg_color = Color(0.018, 0.015, 0.013, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.15, 0.11, 0.08, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="Gradient" id="HealthGradient"]
+offsets = PackedFloat32Array(0, 0.28, 0.58, 1)
+colors = PackedColorArray(0.18, 0.008, 0.012, 1, 0.54, 0.018, 0.025, 1, 0.86, 0.08, 0.075, 1, 0.34, 0.008, 0.015, 1)
+[sub_resource type="GradientTexture2D" id="HealthTexture"]
+gradient = SubResource("HealthGradient")
+width = 256
+height = 16
+fill_from = Vector2(0, 0)
+fill_to = Vector2(0, 1)
+[sub_resource type="StyleBoxTexture" id="HealthFill"]
+texture = SubResource("HealthTexture")
+
+[sub_resource type="Gradient" id="StaminaGradient"]
+offsets = PackedFloat32Array(0, 0.3, 0.58, 1)
+colors = PackedColorArray(0.025, 0.13, 0.035, 1, 0.07, 0.42, 0.12, 1, 0.24, 0.72, 0.31, 1, 0.025, 0.2, 0.055, 1)
+[sub_resource type="GradientTexture2D" id="StaminaTexture"]
+gradient = SubResource("StaminaGradient")
+width = 256
+height = 16
+fill_from = Vector2(0, 0)
+fill_to = Vector2(0, 1)
+[sub_resource type="StyleBoxTexture" id="StaminaFill"]
+texture = SubResource("StaminaTexture")
+
+[sub_resource type="Gradient" id="ManaGradient"]
+offsets = PackedFloat32Array(0, 0.3, 0.58, 1)
+colors = PackedColorArray(0.012, 0.055, 0.18, 1, 0.025, 0.2, 0.62, 1, 0.16, 0.48, 0.95, 1, 0.015, 0.09, 0.31, 1)
+[sub_resource type="GradientTexture2D" id="ManaTexture"]
+gradient = SubResource("ManaGradient")
+width = 256
+height = 16
+fill_from = Vector2(0, 0)
+fill_to = Vector2(0, 1)
+[sub_resource type="StyleBoxTexture" id="ManaFill"]
+texture = SubResource("ManaTexture")
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tlwt5"]
 texture = ExtResource("1_fj7yv")
@@ -330,42 +380,8 @@ size = Vector2(75, 170)
 
 [node name="World" type="Node2D" unique_id=1871762989]
 
-[node name="Ground" type="TileMapLayer" parent="." unique_id=1388817698]
-z_index = -10
-position = Vector2(347, 31)
-tile_map_data = PackedByteArray("AAD//w0AAQAAAAAAAAAAAA4AAQAAAAAAAAAAAA8AAQAAAAAAAAABABAAAQAAAAAAAAABABEAAQAAAAAAAAACABIAAQAAAAAAAAACABMAAQAAAAAAAAADABQAAQAAAAAAAAADABMAAQAAAAAAAAAEABIAAQAAAAAAAAAEABEAAQAAAAAAAAAFABAAAQAAAAAAAAAFAA8AAQAAAAAAAAAGAA4AAQAAAAAAAAAGAA0AAQAAAAAAAAAGAAwAAQAAAAAAAAAFAAsAAQAAAAAAAAAFAAoAAQAAAAAAAAAEAAkAAQAAAAAAAAAEAAgAAQAAAAAAAAADAAcAAQAAAAAAAAADAAYAAQAAAAAAAAACAAcAAQAAAAAAAAACAAgAAQAAAAAAAAABAAkAAQAAAAAAAAABAAoAAQAAAAAAAAAAAAsAAQAAAAAAAAAAAAwAAQAAAAAAAAAAAA0AAQAAAAAAAAABAA4AAQAAAAAAAAABAA8AAQAAAAAAAAACABAAAQAAAAAAAAACABEAAQAAAAAAAAADABIAAQAAAAAAAAADABEAAQAAAAAAAAAEABAAAQAAAAAAAAAEAA8AAQAAAAAAAAAEAA4AAQAAAAAAAAAEAA0AAQAAAAAAAAAFAAwAAQAAAAAAAAAFAA0AAQAAAAAAAAAFAA4AAQAAAAAAAAAEAAwAAQAAAAAAAAADAA0AAQAAAAAAAAADAA4AAQAAAAAAAAACAA8AAQAAAAAAAAADABAAAQAAAAAAAAACAA0AAQAAAAAAAAACAAwAAQAAAAAAAAACAAsAAQAAAAAAAAABAA0AAQAAAAAAAAABAAwAAQAAAAAAAAABAAsAAQAAAAAAAAACAAoAAQAAAAAAAAACAAkAAQAAAAAAAAADAAgAAQAAAAAAAAADAAkAAQAAAAAAAAAEAAoAAQAAAAAAAAAEAAsAAQAAAAAAAAADAAsAAQAAAAAAAAADAAoAAQAAAAAAAAADAAwAAQAAAAAAAAADAA8AAQAAAAAAAAACAA4AAQAAAAAAAAA=")
-tile_set = SubResource("TileSet_wcd18")
-
-[node name="NavigationRegion2D" type="NavigationRegion2D" parent="." unique_id=188528725]
-navigation_polygon = SubResource("NavigationPolygon_wcd18")
-
 [node name="Environment" type="Node2D" parent="." unique_id=573763245]
 y_sort_enabled = true
-
-[node name="TreeTest" type="Polygon2D" parent="Environment" unique_id=815244276 groups=["nav_bake"]]
-position = Vector2(797, 449)
-
-[node name="TreeVisual" type="Polygon2D" parent="Environment/TreeTest" unique_id=1058829222]
-visible = false
-position = Vector2(-736, -463)
-color = Color(0, 1, 0, 1)
-polygon = PackedVector2Array(715, 463, 757, 465, 756.1725, 427.76523, 755, 375, 826, 373, 738, 196, 646, 361, 710, 371)
-
-[node name="TreeColision" type="StaticBody2D" parent="Environment/TreeTest" unique_id=369145233]
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Environment/TreeTest/TreeColision" unique_id=172844242]
-position = Vector2(-1.6895752, -4.0496826)
-rotation = 0.49741888
-scale = Vector2(0.99999994, 0.99999994)
-shape = SubResource("RectangleShape2D_wcd18")
-
-[node name="TreeNavigationObstacle" type="NavigationObstacle2D" parent="Environment/TreeTest" unique_id=1791644853 groups=["nav_bake"]]
-vertices = PackedVector2Array(-30, -36, -33, 9, 33, 14, 30, -34)
-
-[node name="TreeSprite" type="Sprite2D" parent="Environment/TreeTest" unique_id=52081910]
-position = Vector2(-10, -117)
-scale = Vector2(0.2, 0.29433593)
-texture = ExtResource("2_gbfbk")
 
 [node name="Player" type="CharacterBody2D" parent="Environment" unique_id=1164395281]
 position = Vector2(1079, 513)
@@ -426,87 +442,96 @@ collision_mask = 2
 shape = SubResource("RectangleShape2D_gbfbk")
 disabled = true
 
+[node name="Inventory" type="Node" parent="Environment/Player" unique_id=196929110]
+script = ExtResource("10_inventory")
+
 [node name="HUD" type="CanvasLayer" parent="." unique_id=497129756]
 script = ExtResource("7_pkg7o")
 
 [node name="PlayerHealthBar" type="ProgressBar" parent="HUD" unique_id=1851711717]
-modulate = Color(1, 0, 0, 1)
-offset_left = 12.0
-offset_top = 17.0
-offset_right = 272.0
-offset_bottom = 45.0
+offset_left = 58.0
+offset_top = 42.0
+offset_right = 302.0
+offset_bottom = 57.0
+theme_override_styles/background = SubResource("VitalsBarBackground")
+theme_override_styles/fill = SubResource("HealthFill")
 value = 100.0
 show_percentage = false
 
 [node name="HealthLabel" type="Label" parent="HUD" unique_id=532704361]
-offset_left = 10.0
-offset_top = 6.0
-offset_right = 274.0
-offset_bottom = 55.0
+z_index = 2
+offset_left = 58.0
+offset_top = 38.0
+offset_right = 302.0
+offset_bottom = 61.0
+theme_override_colors/font_color = Color(1, 0.92, 0.86, 1)
+theme_override_colors/font_outline_color = Color(0.025, 0.01, 0.008, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
 text = "100 / 100
 "
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="StaminaBar" type="ProgressBar" parent="HUD" unique_id=1565764175]
-modulate = Color(0, 1, 0, 1)
-offset_left = 12.0
-offset_top = 48.0
-offset_right = 272.0
-offset_bottom = 75.0
+offset_left = 58.0
+offset_top = 75.0
+offset_right = 302.0
+offset_bottom = 90.0
+theme_override_styles/background = SubResource("VitalsBarBackground")
+theme_override_styles/fill = SubResource("StaminaFill")
 value = 100.0
 show_percentage = false
 
 [node name="StaminaLabel" type="Label" parent="HUD" unique_id=1859275733]
-offset_left = 107.0
-offset_top = 50.0
-offset_right = 177.0
-offset_bottom = 73.0
+z_index = 2
+offset_left = 58.0
+offset_top = 71.0
+offset_right = 302.0
+offset_bottom = 94.0
+theme_override_colors/font_color = Color(0.9, 1, 0.88, 1)
+theme_override_colors/font_outline_color = Color(0.01, 0.025, 0.012, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
 text = "100 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="ManaBar" type="ProgressBar" parent="HUD"]
-offset_left = 12.0
-offset_top = 79.0
-offset_right = 272.0
-offset_bottom = 106.0
+[node name="ManaBar" type="ProgressBar" parent="HUD" unique_id=1644749556]
+offset_left = 58.0
+offset_top = 109.0
+offset_right = 302.0
+offset_bottom = 124.0
+theme_override_styles/background = SubResource("VitalsBarBackground")
+theme_override_styles/fill = SubResource("ManaFill")
 value = 60.0
 show_percentage = false
 
-[node name="ManaLabel" type="Label" parent="HUD"]
-offset_left = 107.0
-offset_top = 81.0
-offset_right = 177.0
-offset_bottom = 104.0
+[node name="ManaLabel" type="Label" parent="HUD" unique_id=736305735]
+z_index = 2
+offset_left = 58.0
+offset_top = 105.0
+offset_right = 302.0
+offset_bottom = 128.0
+theme_override_colors/font_color = Color(0.86, 0.93, 1, 1)
+theme_override_colors/font_outline_color = Color(0.005, 0.012, 0.04, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
 text = "60 / 60"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="Inventory" type="Node" parent="Environment/Player"]
-script = ExtResource("10_inventory")
+[node name="VitalsFrame" type="TextureRect" parent="HUD"]
+z_index = 1
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 348.0
+offset_bottom = 143.0
+mouse_filter = 2
+texture_filter = 2
+texture = ExtResource("17_hud_frame")
+expand_mode = 1
 
-[node name="InventoryUI" type="CanvasLayer" parent="."]
-script = ExtResource("11_inventory_ui")
+[node name="InventoryUI" parent="." unique_id=1079400225 instance=ExtResource("11_inventory_ui")]
 
-[node name="LootSword" parent="." instance=ExtResource("12_pickup")]
-position = Vector2(1010, 570)
-item_data = ExtResource("13_sword")
-
-[node name="LootBoots" parent="." instance=ExtResource("12_pickup")]
-position = Vector2(1090, 610)
-item_data = ExtResource("14_boots")
-
-[node name="LootCharm" parent="." instance=ExtResource("12_pickup")]
-position = Vector2(1180, 570)
-item_data = ExtResource("15_charm")
-
-[node name="LootMaterials" parent="." instance=ExtResource("12_pickup")]
-position = Vector2(1225, 505)
-item_data = ExtResource("16_shard")
-quantity = 7
-
-[node name="Goblin" parent="." unique_id=145435098 instance=ExtResource("9_ioo17")]
-position = Vector2(669, 415)
-
-[node name="Goblin2" parent="." unique_id=2094493439 instance=ExtResource("9_ioo17")]
-position = Vector2(463, 442)
-
-[node name="Goblin3" parent="." unique_id=534537962 instance=ExtResource("9_ioo17")]
-position = Vector2(593, 368)
+[node name="HotbarUI" parent="." instance=ExtResource("18_hotbar")]

@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://b50jil5mbucoe"]
 
 [ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_oejan"]
-[ext_resource type="Script" path="res://scripts/items/loot_entry.gd" id="2_loot"]
+[ext_resource type="Script" uid="uid://i0w7so0p1l80" path="res://scripts/items/loot_entry.gd" id="2_loot"]
 [ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="3_shard"]
 [ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="4_sword"]
 
@@ -9,7 +9,6 @@
 script = ExtResource("2_loot")
 item = ExtResource("3_shard")
 drop_chance = 0.85
-min_quantity = 1
 max_quantity = 3
 
 [sub_resource type="Resource" id="Loot_sword"]

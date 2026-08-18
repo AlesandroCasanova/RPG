@@ -6,10 +6,10 @@
 [resource]
 script = ExtResource("1_item")
 item_id = &"rusted_sword"
-display_name = "Espada mellada"
-description = "Una espada goblin dañada, todavía peligrosa en manos firmes."
+display_name = "Espada de leva mellada"
+description = "Una hoja común reparada demasiadas veces. Es lo mejor que el asentamiento puede entregar a un recolector nuevo."
 item_type = 1
-rarity = 1
+rarity = 0
 icon = ExtResource("2_icon")
 equipment_slot = 1
 strength_bonus = 3

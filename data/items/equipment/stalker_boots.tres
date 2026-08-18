@@ -11,6 +11,6 @@ description = "Calzado flexible diseñado para moverse con rapidez y en silencio
 item_type = 1
 rarity = 2
 icon = ExtResource("2_icon")
-equipment_slot = 2
+equipment_slot = 5
 dexterity_bonus = 2
 endurance_bonus = 2

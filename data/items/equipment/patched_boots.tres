@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/stalker_boots.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+item_id = &"patched_boots"
+display_name = "Botas remendadas"
+description = "Cuero reseco, cuerda y dos suelas distintas. Alguien del asentamiento caminó años con ellas antes que vos."
+item_type = 1
+rarity = 0
+icon = ExtResource("2")
+equipment_slot = 5
+endurance_bonus = 1

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/items/icons/bitter_stamina_tonic.svg" id="2"]
+
+[resource]
+script = ExtResource("1")
+item_id = &"bitter_stamina_tonic"
+display_name = "Tónico de raíz amarga"
+description = "Una mezcla áspera de raíces del páramo. Devuelve fuerzas, aunque deja la boca entumecida."
+item_type = 0
+rarity = 0
+icon = ExtResource("2")
+stackable = true
+max_stack = 10
+consumable_effect = 2
+effect_amount = 45.0

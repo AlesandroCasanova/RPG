@@ -11,6 +11,6 @@ description = "Un talismán pesado que ayuda a resistir impactos."
 item_type = 1
 rarity = 1
 icon = ExtResource("2_icon")
-equipment_slot = 3
+equipment_slot = 9
 vitality_bonus = 3
 willpower_bonus = 2

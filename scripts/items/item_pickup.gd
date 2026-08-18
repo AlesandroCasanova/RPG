@@ -42,15 +42,7 @@ func _ready() -> void:
 
 func _create_label() -> void:
 
-	item_label = Label.new()
-	item_label.position = Vector2(-80.0, -48.0)
-	item_label.custom_minimum_size = Vector2(160.0, 28.0)
-	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	item_label.add_theme_font_size_override("font_size", 13)
-	item_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	item_label.add_theme_constant_override("outline_size", 4)
-	item_label.z_index = 50
-	add_child(item_label)
+	item_label = $ItemLabel
 	_update_label()
 
 
@@ -86,15 +78,16 @@ func _update_label() -> void:
 
 func _create_icon_sprite() -> void:
 
+	item_sprite = $ItemSprite
+
 	if item_data == null or item_data.icon == null:
 
+		item_sprite.visible = false
 		return
 
 
-	item_sprite = Sprite2D.new()
+	item_sprite.visible = true
 	item_sprite.texture = item_data.icon
-	item_sprite.position = Vector2(0.0, -4.0)
-	item_sprite.z_index = 10
 
 
 	var texture_size: Vector2 = item_data.icon.get_size()
@@ -104,7 +97,6 @@ func _create_icon_sprite() -> void:
 	)
 	var icon_scale: float = 46.0 / maxf(largest_dimension, 1.0)
 	item_sprite.scale = Vector2.ONE * icon_scale
-	add_child(item_sprite)
 
 
 func _on_body_entered(body: Node2D) -> void:

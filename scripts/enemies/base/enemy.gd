@@ -3396,7 +3396,7 @@ func die() -> void:
 	defeated.emit(self)
 
 
-	_drop_loot()
+	_create_loot_corpse()
 
 
 	wants_navigation_movement = false
@@ -3424,61 +3424,23 @@ func die() -> void:
 	queue_free()
 
 
-func _drop_loot() -> void:
-
-	if enemy_data == null or enemy_data.loot_table.is_empty():
-
+func _create_loot_corpse() -> void:
+	var stacks: Array[Dictionary] = []
+	if enemy_data != null:
+		for loot_entry: LootEntry in enemy_data.loot_table:
+			if loot_entry == null:
+				continue
+			var quantity := loot_entry.roll_quantity(loot_random)
+			if quantity > 0 and loot_entry.item != null:
+				stacks.append({"item": loot_entry.item, "quantity": quantity})
+	var drop_parent := get_parent()
+	if drop_parent == null:
 		return
-
-
-	var pickup_scene: PackedScene = preload(
-		"res://scenes/items/item_pickup.tscn"
-	)
-	var drop_index: int = 0
-
-
-	for loot_entry: LootEntry in enemy_data.loot_table:
-
-		if loot_entry == null:
-
-			continue
-
-
-		var rolled_quantity: int = loot_entry.roll_quantity(
-			loot_random
-		)
-
-
-		if rolled_quantity <= 0:
-
-			continue
-
-
-		var pickup: ItemPickup = pickup_scene.instantiate()
-		pickup.item_data = loot_entry.item
-		pickup.quantity = rolled_quantity
-
-
-		var drop_parent: Node = get_parent()
-
-
-		if drop_parent == null:
-
-			continue
-
-
-		drop_parent.add_child(pickup)
-
-
-		var angle: float = (
-			TAU * float(drop_index) / 5.0
-			+ loot_random.randf_range(-0.35, 0.35)
-		)
-		var distance: float = loot_random.randf_range(18.0, 34.0)
-		pickup.global_position = global_position + Vector2.from_angle(
-			angle
-		) * distance
-		drop_index += 1
+	var corpse_scene := preload("res://scenes/items/corpse_loot.tscn") as PackedScene
+	var corpse := corpse_scene.instantiate() as CorpseLoot
+	drop_parent.add_child(corpse)
+	corpse.global_position = global_position
+	corpse.configure(enemy_animated, stacks)
 
 
 # =========================================================
