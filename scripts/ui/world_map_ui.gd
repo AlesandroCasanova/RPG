@@ -45,6 +45,7 @@ var locations: Dictionary = {
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("world_map_ui")
 	layer = 30
 	mini_panel = $MiniPanel
 	mini_canvas = $MiniPanel/MiniCanvas/Markers
@@ -95,6 +96,20 @@ func clear_quest_marker() -> void:
 func discover_location(location_id: StringName) -> void:
 	if locations.has(location_id):
 		locations[location_id]["discovered"] = true
+
+
+func get_save_data() -> Dictionary:
+	var discovered: Array[String] = []
+	for location_id: StringName in locations:
+		if bool(locations[location_id]["discovered"]):
+			discovered.append(String(location_id))
+	return {"discovered_locations": discovered}
+
+
+func load_save_data(data: Dictionary) -> void:
+	var discovered := Array(data.get("discovered_locations", []))
+	for location_id: StringName in locations:
+		locations[location_id]["discovered"] = String(location_id) in discovered
 
 
 func _find_player() -> void:

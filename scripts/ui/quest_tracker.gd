@@ -16,6 +16,7 @@ var notification_label: Label
 func _ready() -> void:
 
 	layer = 20
+	add_to_group("quest_tracker")
 	panel = $QuestPanel
 	title_label = $QuestPanel/Margin/Content/TitleLabel
 	objective_label = $QuestPanel/Margin/Content/ObjectiveLabel

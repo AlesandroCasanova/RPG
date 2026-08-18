@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DialogueData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+speaker = "{player_name}"
+text = "Las vetas oscuras no vienen del campo. Avanzan desde la Fosa de los Murmullos y son demasiado recientes."
+side = "left"
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+speaker = "{player_name}"
+text = "Los goblins estaban huyendo de esto. El refugio es el siguiente lugar seguro en su camino."
+side = "left"
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"investigation_track"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2")])
+

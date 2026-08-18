@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://c27ux7pxnuf8e"]
+
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_i8hjw"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+text = "¿Goblins en la zona segura? Hace menos de una luna no había huellas ni fogatas allí."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+text = "Entonces no fueron ellos los que se volvieron valientes. Algo los empujó hacia nosotros."
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+text = "La energía maldita vuelve a expandirse. Si alcanzó nuestros campos, este refugio ya no tiene tiempo para limitarse a sobrevivir."
+
+[sub_resource type="Resource" id="Entry4"]
+script = ExtResource("2_entry")
+text = "El consejo se reunirá ahora. Quieren escuchar lo que viste y decidir qué riesgo aceptar."
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"report_goblins"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3"), SubResource("Entry4")])

@@ -1,6 +1,24 @@
 extends CharacterBody2D
 
 
+signal character_name_changed(new_name: String)
+
+@export_category("Identidad")
+@export var character_name: String = "El Ambicioso"
+
+
+func set_character_name(new_name: String) -> void:
+	var clean_name := new_name.strip_edges()
+	if clean_name.is_empty():
+		return
+	character_name = clean_name.left(24)
+	character_name_changed.emit(character_name)
+
+
+func get_character_name() -> String:
+	return character_name
+
+
 const SpriteSheetAnimationBuilder = preload(
 	"res://scripts/animation/sprite_sheet_animation.gd"
 )
@@ -852,6 +870,58 @@ func _capture_base_stats() -> void:
 func get_inventory() -> PlayerInventory:
 
 	return get_node_or_null("Inventory") as PlayerInventory
+
+
+# Devuelve solamente señales que otro personaje podría observar en pantalla.
+# No expone inputs, cooldowns, daño ni tiempos exactos de impacto.
+func get_combat_observable_snapshot() -> Dictionary:
+	var locomotion: StringName = &"idle"
+	if is_dashing:
+		locomotion = &"dash"
+	elif is_crouching:
+		locomotion = &"crouch"
+	elif is_sprinting:
+		locomotion = &"sprint"
+	elif velocity.length_squared() > 1.0:
+		locomotion = &"move"
+	var action: StringName = &"none"
+	var phase: StringName = &"none"
+	var attack_family: StringName = &"none"
+	var charge_stage: StringName = &"none"
+	if is_charging_heavy:
+		action = &"charge"
+		phase = &"telegraph"
+		attack_family = &"charged" if charged_attack_ready else &"heavy"
+		charge_stage = &"ready" if charged_attack_ready else &"building"
+	elif attack_action_time_left > 0.0:
+		action = &"attack"
+		# Los tres golpes comparten actualmente la misma hoja visual.
+		# Sin historial de carga solo se puede reconocer un swing genérico.
+		attack_family = &"melee_swing"
+		if attack_hit_delay_left > 0.0:
+			phase = &"telegraph"
+		elif attack_hitbox_active:
+			phase = &"active"
+		else:
+			phase = &"recovery"
+	var visible_facing := Vector2.DOWN
+	match _get_cardinal_animation_facing():
+		"n": visible_facing = Vector2.UP
+		"e": visible_facing = Vector2.RIGHT
+		"w": visible_facing = Vector2.LEFT
+	return {
+		"sequence": Engine.get_physics_frames(),
+		"position": global_position,
+		"velocity": velocity,
+		"facing": visible_facing,
+		"locomotion": locomotion,
+		"action": action,
+		"phase": phase,
+		"attack_family": attack_family,
+		"charge_stage": charge_stage,
+		"noise_level": get_movement_noise_level(),
+		"alive": not is_dead
+	}
 
 
 func apply_equipment_bonuses(bonuses: Dictionary) -> void:

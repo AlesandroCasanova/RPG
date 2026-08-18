@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://ce5do51w2rshs"]
+
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_wn4c3"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+text = "Dos brebajes aguados, una raíz amarga y un poco de residuo mágico. No es medicina de ciudad, pero es todo lo que tenemos."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+text = "Arrastralos a las casillas 1 a 6. En el camino, esas teclas pueden ser la diferencia entre volver o quedar tirado."
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+text = "Traé fibras, hongos secos y cualquier metal que encuentres. No te alejes de la senda: esa zona es segura."
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"supplies"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])

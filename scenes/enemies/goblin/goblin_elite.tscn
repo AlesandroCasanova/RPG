@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin.tscn" id="1_goblin"]
+[ext_resource type="Resource" path="res://data/enemies/goblin/elite.tres" id="2_data"]
+[ext_resource type="Resource" path="res://data/ai/goblin/elite_50.tres" id="3_ai"]
+
+[node name="GoblinElite" instance=ExtResource("1_goblin")]
+enemy_data = ExtResource("2_data")
+ai_profile = ExtResource("3_ai")
+debug_combat = false
+
+[node name="EnemyAnimated" parent="." index="0"]
+modulate = Color(1, 0.76, 0.48, 1)
+scale = Vector2(0.265, 0.265)
+
+[node name="HealthBar" parent="." index="3"]
+modulate = Color(1, 0.42, 0.08, 1)
+

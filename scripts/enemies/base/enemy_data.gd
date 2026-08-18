@@ -10,6 +10,8 @@ extends Resource
 
 @export var enemy_name: String = "Enemy"
 
+@export var animation_family: StringName = &""
+
 
 # =========================================================
 # VIDA
@@ -30,8 +32,29 @@ var max_health: int = 100
 @export_range(0.0, 5000.0, 1.0)
 var move_speed: float = 120.0
 
-@export_range(0.0, 10000.0, 1.0)
-var detection_range: float = 300.0
+@export_category("Movilidad especial")
+
+@export var can_dash: bool = false
+
+@export_range(0.0, 3000.0, 1.0)
+var dash_speed: float = 620.0
+
+@export_range(0.01, 1.0, 0.01)
+var dash_duration: float = 0.13
+
+@export_range(0.0, 10.0, 0.05)
+var dash_cooldown: float = 1.8
+
+@export_range(0.0, 1000.0, 1.0)
+var dash_stamina_cost: float = 20.0
+
+@export var can_cancel_attack_windup: bool = false
+
+@export_range(0.0, 1000.0, 1.0)
+var reactive_cancel_stamina_cost: float = 15.0
+
+@export_range(0.0, 20.0, 0.05)
+var reactive_cancel_cooldown: float = 3.0
 
 
 # =========================================================
@@ -92,24 +115,17 @@ var stamina_regen_delay: float = 0.80
 
 @export_category("Combate grupal")
 
+@export var squad_id: StringName = &"default"
+
+@export_range(0.0, 5000.0, 1.0)
+var coordination_radius: float = 650.0
+
 @export_range(1, 20, 1)
 var max_simultaneous_attackers: int = 2
 
 
 @export_range(0.0, 1000.0, 1.0)
 var attack_slot_radius: float = 42.0
-
-
-@export_range(1, 64, 1)
-var attack_slot_count: int = 12
-
-
-@export_range(0.0, 2000.0, 1.0)
-var waiting_slot_radius: float = 115.0
-
-
-@export_range(1, 64, 1)
-var waiting_slot_count: int = 16
 
 
 # =========================================================
@@ -184,3 +200,6 @@ var avoidance_max_neighbors: int = 8
 
 @export_range(0.0, 10.0, 0.05)
 var avoidance_time_horizon: float = 0.6
+
+@export_range(0.0, 10.0, 0.05)
+var avoidance_time_horizon_obstacles: float = 0.5

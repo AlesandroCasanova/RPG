@@ -127,3 +127,7 @@ theme_override_colors/font_color = Color(0.65, 0.61, 0.53, 1)
 theme_override_font_sizes/font_size = 14
 text = "F / ESPACIO  ·  continuar"
 horizontal_alignment = 2
+
+[node name="Choices" type="VBoxContainer" parent="DialogueOverlay/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6

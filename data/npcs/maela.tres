@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_data.gd" id="1_npc"]
+[ext_resource type="Texture2D" path="res://assets/characters/npcs/maela/maela_poor.png" id="2_portrait"]
+[ext_resource type="Resource" path="res://data/dialogues/chapter_01/maela_intro.tres" id="3_intro"]
+[ext_resource type="Resource" path="res://data/dialogues/chapter_01/maela_report.tres" id="4_report"]
+[ext_resource type="Resource" path="res://data/dialogues/chapter_01/maela_chapter_end.tres" id="5_end"]
+
+[resource]
+script = ExtResource("1_npc")
+npc_id = &"maela"
+display_name = "Maela"
+portrait = ExtResource("2_portrait")
+dialogues = Array[DialogueData]([ExtResource("3_intro"), ExtResource("4_report"), ExtResource("5_end")])
+

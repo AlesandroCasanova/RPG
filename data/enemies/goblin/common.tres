@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://b50jil5mbucoe"]
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://cvmwb4jrh1vkc"]
 
-[ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_oejan"]
+[ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_enemy"]
 [ext_resource type="Script" uid="uid://i0w7so0p1l80" path="res://scripts/items/loot_entry.gd" id="2_loot"]
 [ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="3_shard"]
 [ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="4_sword"]
@@ -17,13 +17,18 @@ item = ExtResource("4_sword")
 drop_chance = 0.12
 
 [resource]
-script = ExtResource("1_oejan")
-enemy_name = "Goblin"
-can_use_heavy_attacks = true
-can_use_charged_attacks = true
+script = ExtResource("1_enemy")
+enemy_name = "Goblin común"
+animation_family = &"goblin"
+max_health = 85
+move_speed = 115.0
 uses_stamina = true
-max_stamina = 249.0
-max_simultaneous_attackers = 1
+max_stamina = 80.0
+stamina_regen_rate = 18.0
+stamina_regen_delay = 0.9
+squad_id = &"goblin_warband"
+coordination_radius = 520.0
 loot_table = Array[ExtResource("2_loot")]([SubResource("Loot_shard"), SubResource("Loot_sword")])
-knockback_force = 0.0
-metadata/_custom_type_script = "uid://bqmn1j27q23ip"
+knockback_force = 110.0
+stagger_threshold = 145.0
+avoidance_radius = 21.0

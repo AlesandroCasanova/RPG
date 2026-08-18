@@ -17,6 +17,7 @@
 [ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="16_shard"]
 [ext_resource type="Texture2D" path="res://assets/ui/hud/vitals_frame_compact.png" id="17_hud_frame"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hotbar_ui.tscn" id="18_hotbar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/name_entry_ui.tscn" id="19_name_entry"]
 
 [sub_resource type="StyleBoxFlat" id="VitalsBarBackground"]
 bg_color = Color(0.018, 0.015, 0.013, 0.96)
@@ -535,3 +536,5 @@ expand_mode = 1
 [node name="InventoryUI" parent="." unique_id=1079400225 instance=ExtResource("11_inventory_ui")]
 
 [node name="HotbarUI" parent="." instance=ExtResource("18_hotbar")]
+
+[node name="NameEntryUI" parent="." instance=ExtResource("19_name_entry")]

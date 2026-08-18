@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+attack_name = "Barrido cargado goblin"
+attack_kind = 2
+damage = 20
+windup_time = 0.1
+active_time = 0.29
+recovery_time = 0.6
+charge_time = 1.07
+cooldown = 3.2
+stamina_cost = 50.0
+ai_weight = 1.25
+hitbox_length = 70.0
+hitbox_width = 50.0
+hitbox_start_offset = 8.0
+knockback_force = 210.0
+

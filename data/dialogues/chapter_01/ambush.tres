@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="DialogueData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+speaker = "Goblin"
+text = "¡Maldito humano asqueroso! Dejá la bolsa y todo lo que llevás... o te destripamos acá mismo."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+speaker = "{player_name}"
+text = "Esta zona pertenece al asentamiento. Si quieren nuestros recursos, tendrán que quitármelos."
+side = "left"
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+speaker = "Goblin"
+text = "Je. El cachorro cree que puede elegir. ¡Mátenlo!"
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"ambush"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])
+

@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin.tscn" id="1_goblin"]
+[ext_resource type="Resource" path="res://data/enemies/goblin/boss.tres" id="2_data"]
+[ext_resource type="Resource" path="res://data/ai/goblin/boss_80.tres" id="3_ai"]
+[ext_resource type="Resource" path="res://data/attacks/goblin/goblin_interrupting_hook.tres" id="4_interrupt"]
+
+[node name="GoblinBoss" instance=ExtResource("1_goblin")]
+enemy_data = ExtResource("2_data")
+ai_profile = ExtResource("3_ai")
+interrupt_attack = ExtResource("4_interrupt")
+debug_combat = false
+
+[node name="EnemyAnimated" parent="." index="0"]
+modulate = Color(0.72, 0.36, 0.3, 1)
+scale = Vector2(0.295, 0.295)
+
+[node name="HealthBar" parent="." index="3"]
+modulate = Color(0.72, 0.05, 0.2, 1)
+offset_left = -36.0
+offset_right = 50.0

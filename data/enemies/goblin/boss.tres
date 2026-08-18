@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/base/enemy_data.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/items/loot_entry.gd" id="2_loot"]
+[ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="3_shard"]
+[ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="4_sword"]
+
+[sub_resource type="Resource" id="Loot_shard"]
+script = ExtResource("2_loot")
+item = ExtResource("3_shard")
+drop_chance = 1.0
+min_quantity = 4
+max_quantity = 7
+
+[sub_resource type="Resource" id="Loot_sword"]
+script = ExtResource("2_loot")
+item = ExtResource("4_sword")
+drop_chance = 0.65
+
+[resource]
+script = ExtResource("1_enemy")
+enemy_name = "Jefe goblin"
+animation_family = &"goblin"
+max_health = 360
+move_speed = 135.0
+can_dash = true
+dash_speed = 690.0
+dash_duration = 0.16
+dash_cooldown = 1.6
+dash_stamina_cost = 25.0
+can_cancel_attack_windup = true
+reactive_cancel_stamina_cost = 18.0
+reactive_cancel_cooldown = 2.4
+can_use_heavy_attacks = true
+can_use_charged_attacks = true
+attack_interrupt_knockback_threshold = 230.0
+uses_stamina = true
+max_stamina = 180.0
+stamina_regen_rate = 27.0
+stamina_regen_delay = 0.65
+squad_id = &"goblin_warband"
+coordination_radius = 700.0
+max_simultaneous_attackers = 2
+loot_table = Array[ExtResource("2_loot")]([SubResource("Loot_shard"), SubResource("Loot_sword")])
+knockback_force = 145.0
+knockback_resistance = 0.45
+knockback_friction = 1700.0
+stagger_threshold = 260.0
+stagger_force_for_max_duration = 520.0
+stagger_min_duration = 0.1
+stagger_max_duration = 0.34
+avoidance_radius = 28.0
+avoidance_neighbor_distance = 145.0

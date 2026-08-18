@@ -1,0 +1,146 @@
+[gd_scene format=3 uid="uid://1gu8xn8fedft"]
+
+[ext_resource type="PackedScene" uid="uid://e81fugeluhil" path="res://scenes/enemies/goblin/goblin.tscn" id="1_goblin"]
+[ext_resource type="Texture2D" uid="uid://b0nxrq12v0jys" path="res://assets/characters/enemies/goblin/sprites/idle/goblien_sheet_cardinal.png" id="2_yr5y1"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cqlnd"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(767, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4pqsi"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(958, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_85o3b"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(1149, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k0tox"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(1340, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d05ci"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(767, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qytv7"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(958, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_61w7u"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(1149, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5nu0w"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(1340, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_rru8r"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(3, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k6qjw"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(194, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tw45a"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(385, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3gwgx"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(576, 0, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jfuon"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(3, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oik0c"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(194, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_s7bcd"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(385, 511, 191, 511)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_id78e"]
+atlas = ExtResource("2_yr5y1")
+region = Rect2(576, 511, 191, 511)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_6pf1l"]
+resource_local_to_scene = true
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cqlnd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4pqsi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_85o3b")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_k0tox")
+}],
+"loop": 1,
+"name": &"idle_e",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_d05ci")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qytv7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_61w7u")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5nu0w")
+}],
+"loop": 1,
+"name": &"idle_n",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_rru8r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_k6qjw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tw45a")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3gwgx")
+}],
+"loop": 1,
+"name": &"idle_s",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jfuon")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_oik0c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_s7bcd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_id78e")
+}],
+"loop": 1,
+"name": &"idle_w",
+"speed": 5.0
+}]
+
+[node name="GoblinCommon" unique_id=1388313946 instance=ExtResource("1_goblin")]
+
+[node name="EnemyAnimated" parent="." index="0" unique_id=789413155]
+modulate = Color(0.9, 1, 0.82, 1)
+sprite_frames = SubResource("SpriteFrames_6pf1l")

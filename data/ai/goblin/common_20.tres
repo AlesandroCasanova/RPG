@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="EnemyAIProfile" format=3 uid="uid://hmva0u8c0xgc"]
+
+[ext_resource type="Script" uid="uid://co4wldirw0gtb" path="res://scripts/enemies/ai/enemy_ai_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+intelligence_percent = 100.0
+reaction_time_multiplier = 0.9
+memory_error_multiplier = 0.6
+mistake_chance_at_zero = 0.55
+mistake_chance_at_hundred = 0.03
+vision_range = 320.0
+vision_angle_degrees = 190.0
+hearing_range = 150.0
+hearing_velocity_threshold = 70.0
+memory_duration = 2.2
+decision_interval = 0.34
+minimum_commitment = 0.6
+maximum_commitment = 0.95
+aggression = 1.25
+courage = 0.55
+teamwork = 0.25
+patience = 0.25
+retreat_health_ratio = 0.28
+preferred_distance = 54.0
+flank_radius = 95.0
+support_radius = 105.0
+retreat_distance = 170.0
+circle_radius = 72.0
+cover_search_radius = 190.0
+cover_hold_duration = 0.7
+danger_padding = 22.0
+attack_utility = 1.65
+approach_utility = 1.25
+flank_utility = 0.2
+hold_utility = 0.35
+retreat_utility = 1.75
+search_utility = 0.55
+circle_utility = 0.1
+cover_utility = 0.1
+dodge_utility = 0.1
+interrupt_utility = 0.1

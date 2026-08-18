@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://42slgtcgbwrl"]
+
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_taxed"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+text = "{player_name}, cumpliste la edad. Desde hoy, cada ración que comas también tendrás que ayudar a conseguirla."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+text = "No es un castigo. Es la única forma en que este lugar sigue vivo. Los graneros están casi vacíos y ya racionamos la leña."
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+text = "Irás a la vieja zona de recolección del este. Siempre fue segura. Primero hablá con Ivar: te dará lo poco que podemos prestar."
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"intro"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])

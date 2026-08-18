@@ -54,5 +54,6 @@ Ranuras actuales:
 - armadura;
 - accesorio.
 
-El inventario del jugador tiene inicialmente 20 espacios. Los objetos equipados
-permanecen visibles dentro del inventario con el prefijo `[E]`.
+El inventario del jugador tiene 32 espacios, seis accesos rápidos y ranuras
+separadas para arma, cabeza, pecho, piernas, botas, guantes, dos anillos y
+amuleto. Todo este estado queda incluido en el archivo de guardado.

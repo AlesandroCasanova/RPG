@@ -15,6 +15,8 @@ const SLOT_COUNT: int = 32
 @onready var preview_sprite: AnimatedSprite2D = $InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/PreviewStage/PlayerPreview
 @onready var stats_label: Label = $InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/StatsPanel/StatsLabel
 @onready var close_button: Button = $InventoryRoot/Frame/Margin/Layout/Header/CloseButton
+@onready var title_label: Label = $InventoryRoot/Frame/Margin/Layout/Header/Title
+@onready var character_title: Label = $InventoryRoot/Frame/Margin/Layout/Columns/CharacterColumn/CharacterTitle
 
 var player: CharacterBody2D
 var inventory: PlayerInventory
@@ -107,6 +109,10 @@ func _connect_inventory() -> void:
 	if inventory == null:
 		push_warning("InventoryUI: el Player no tiene nodo Inventory.")
 		return
+	_update_character_name()
+	var name_changed_callback := Callable(self, "_on_character_name_changed")
+	if player.has_signal("character_name_changed") and not player.is_connected("character_name_changed", name_changed_callback):
+		player.connect("character_name_changed", name_changed_callback)
 	inventory.capacity = SLOT_COUNT
 	inventory.inventory_changed.connect(_refresh)
 	inventory.equipment_changed.connect(_refresh)
@@ -117,6 +123,18 @@ func _connect_inventory() -> void:
 			inventory_quick_slots[index].configure(hotbar, index)
 	_configure_player_preview()
 	_refresh()
+
+
+func _on_character_name_changed(_new_name: String) -> void:
+	_update_character_name()
+
+
+func _update_character_name() -> void:
+	var player_name := "El Ambicioso"
+	if player != null and player.has_method("get_character_name"):
+		player_name = String(player.get_character_name())
+	title_label.text = "INVENTARIO DE " + player_name.to_upper()
+	character_title.text = player_name.to_upper()
 
 
 func _configure_player_preview() -> void:

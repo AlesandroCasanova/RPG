@@ -340,6 +340,30 @@ position = Vector2(2350, 1080)
 position = Vector2(0, -61.44)
 scale = Vector2(0.12, 0.12)
 texture = ExtResource("5_rocks")
+[node name="TacticalRocksWest" type="Node2D" parent="Props"]
+position = Vector2(3090, 720)
+[node name="Sprite" type="Sprite2D" parent="Props/TacticalRocksWest"]
+position = Vector2(0, -66.56)
+scale = Vector2(0.13, 0.13)
+texture = ExtResource("5_rocks")
+[node name="TacticalRocksNorth" type="Node2D" parent="Props"]
+position = Vector2(3290, 600)
+[node name="Sprite" type="Sprite2D" parent="Props/TacticalRocksNorth"]
+position = Vector2(0, -66.56)
+scale = Vector2(0.13, 0.13)
+texture = ExtResource("5_rocks")
+[node name="TacticalRocksEast" type="Node2D" parent="Props"]
+position = Vector2(3400, 790)
+[node name="Sprite" type="Sprite2D" parent="Props/TacticalRocksEast"]
+position = Vector2(0, -66.56)
+scale = Vector2(0.13, 0.13)
+texture = ExtResource("5_rocks")
+[node name="TacticalRocksSouth" type="Node2D" parent="Props"]
+position = Vector2(3300, 1010)
+[node name="Sprite" type="Sprite2D" parent="Props/TacticalRocksSouth"]
+position = Vector2(0, -66.56)
+scale = Vector2(0.13, 0.13)
+texture = ExtResource("5_rocks")
 
 [node name="Vegetation" type="Node2D" parent="."]
 y_sort_enabled = true
@@ -449,3 +473,19 @@ shape = SubResource("CottageShape")
 position = Vector2(1240, 910)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Collisions/InfirmaryBlocker"]
 shape = SubResource("CottageShape")
+[node name="TacticalRocksWestBlocker" type="StaticBody2D" parent="Collisions"]
+position = Vector2(3090, 710)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collisions/TacticalRocksWestBlocker"]
+shape = SubResource("RockShape")
+[node name="TacticalRocksNorthBlocker" type="StaticBody2D" parent="Collisions"]
+position = Vector2(3290, 590)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collisions/TacticalRocksNorthBlocker"]
+shape = SubResource("RockShape")
+[node name="TacticalRocksEastBlocker" type="StaticBody2D" parent="Collisions"]
+position = Vector2(3400, 780)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collisions/TacticalRocksEastBlocker"]
+shape = SubResource("RockShape")
+[node name="TacticalRocksSouthBlocker" type="StaticBody2D" parent="Collisions"]
+position = Vector2(3300, 1000)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collisions/TacticalRocksSouthBlocker"]
+shape = SubResource("RockShape")

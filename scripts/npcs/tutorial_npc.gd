@@ -5,6 +5,9 @@ extends Area2D
 signal interacted
 
 
+@export var npc_data: NPCData
+
+
 @onready var character_sprite: Sprite2D = $CharacterSprite
 
 @onready var quest_marker: Label = $QuestMarker
@@ -27,7 +30,13 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 	interaction_prompt.visible = false
+	if npc_data != null:
+		interaction_prompt.text = npc_data.get_interaction_text()
 	_start_idle_motion()
+
+
+func get_npc_data() -> NPCData:
+	return npc_data
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -17,6 +17,8 @@ const GOBLIN_ATTACK_SHEET: Texture2D = preload(
 	"res://assets/characters/enemies/goblin/sprites/actions/goblin_attack_cardinal.png"
 )
 
+const COVER_ARRIVAL_TOLERANCE: float = 12.0
+
 
 # =========================================================
 # RECURSOS
@@ -31,6 +33,8 @@ const GOBLIN_ATTACK_SHEET: Texture2D = preload(
 @export var heavy_attack: AttackData
 
 @export var charged_attack: AttackData
+
+@export var interrupt_attack: AttackData
 
 @export var ai_profile: EnemyAIProfile
 
@@ -170,6 +174,8 @@ var utility_brain: EnemyUtilityBrain = null
 
 var squad_coordinator: EnemySquadCoordinator = null
 
+var tactical_positioning: EnemyTacticalPositioning = null
+
 var ai_role: StringName = &"support"
 
 var ai_action: StringName = &"hold"
@@ -177,6 +183,26 @@ var ai_action: StringName = &"hold"
 var ai_target_position: Vector2 = Vector2.ZERO
 
 var ai_can_attack: bool = false
+
+var ai_cover_candidate: Dictionary = {}
+
+var ai_reserved_cover: EnemyCoverPoint = null
+
+var ai_is_holding_cover: bool = false
+
+var ai_cover_hold_time_left: float = 0.0
+
+var ai_cover_reentry_cooldown_left: float = 0.0
+
+var ai_dash_direction: Vector2 = Vector2.ZERO
+
+var ai_dash_time_left: float = 0.0
+
+var ai_dash_cooldown_left: float = 0.0
+
+var ai_reactive_cancel_cooldown_left: float = 0.0
+
+var ai_random: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 # =========================================================
@@ -333,23 +359,30 @@ func _setup_combat_intelligence() -> void:
 	perception.configure(
 		self,
 		player,
-		ai_profile
+		ai_profile,
+		int(get_instance_id() % 1000000)
 	)
 
 
 	utility_brain = EnemyUtilityBrain.new()
-	utility_brain.configure(ai_profile)
+	utility_brain.configure(ai_profile, int(get_instance_id() % 1000000))
 
 
 	squad_coordinator = EnemySquadCoordinator.new()
+	tactical_positioning = EnemyTacticalPositioning.new()
+	tactical_positioning.configure(ai_profile, int(get_instance_id() % 1000000))
+	if ai_profile.deterministic_seed > 0:
+		ai_random.seed = ai_profile.deterministic_seed + int(get_instance_id() % 1000000) * 3571
+	else:
+		ai_random.randomize()
 
 
 	if debug_combat:
 
 		debug_ai_label = Label.new()
 		debug_ai_label.name = "AIDebugLabel"
-		debug_ai_label.position = Vector2(-75.0, -92.0)
-		debug_ai_label.custom_minimum_size = Vector2(150.0, 42.0)
+		debug_ai_label.position = Vector2(-95.0, -112.0)
+		debug_ai_label.custom_minimum_size = Vector2(190.0, 72.0)
 		debug_ai_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		debug_ai_label.add_theme_font_size_override("font_size", 11)
 		debug_ai_label.add_theme_color_override("font_color", Color.WHITE)
@@ -436,6 +469,10 @@ func _setup_navigation_avoidance() -> void:
 
 	navigation_agent.time_horizon_agents = (
 		enemy_data.avoidance_time_horizon
+	)
+
+	navigation_agent.time_horizon_obstacles = (
+		enemy_data.avoidance_time_horizon_obstacles
 	)
 
 	navigation_agent.max_speed = (
@@ -577,6 +614,8 @@ func _physics_process(
 		delta
 	)
 
+	_update_ai_mobility_timers(delta)
+
 
 	if not is_instance_valid(player):
 
@@ -618,10 +657,25 @@ func _physics_process(
 
 
 	# =====================================================
+	# DASH TÁCTICO EN PROGRESO
+	# =====================================================
+
+	if ai_dash_time_left > 0.0:
+
+		_process_ai_dash(delta)
+
+		return
+
+
+	# =====================================================
 	# ATAQUE EN PROGRESO
 	# =====================================================
 
 	if current_attack != null:
+
+		if _try_reactive_attack_cancel():
+
+			return
 
 		_process_current_attack(
 			delta
@@ -666,8 +720,25 @@ func _physics_process(
 	# =====================================================
 
 	debug_distance_to_player = global_position.distance_to(
-		player.global_position
+		perception.get_estimated_target_position(false)
 	)
+
+
+	# Una vez alcanzada, la cobertura es un compromiso espacial real. No se
+	# abandona solo porque el obstáculo corte el LOS que justamente debía cortar.
+	if ai_is_holding_cover:
+
+		ai_action = &"cover"
+		_execute_cover_hold_intention()
+		_update_ai_debug_label()
+
+
+		if debug_combat:
+
+			queue_redraw()
+
+
+		return
 
 
 	if perception == null or not perception.is_aware:
@@ -756,8 +827,19 @@ func _get_perception_facing_direction() -> Vector2:
 # =========================================================
 
 func _update_tactical_assignment() -> void:
+	var estimated_target := perception.get_estimated_target_position(true)
+	if not perception.has_confirmed_visual_contact:
+		var can_search := ai_profile.is_capability_enabled(EnemyAIProfile.CAP_SEARCH)
+		ai_role = &"search" if can_search else &"waiting"
+		ai_target_position = estimated_target if can_search else global_position
+		ai_can_attack = false
+		debug_combat_position = ai_target_position
+		debug_can_attack = false
+		return
 
-	var active_enemies: Array[Node] = _get_active_enemies()
+	var active_enemies: Array[Node] = EnemySquadCoordinator.get_active_enemies(
+		get_tree()
+	)
 
 
 	if not active_enemies.has(self):
@@ -768,7 +850,7 @@ func _update_tactical_assignment() -> void:
 	var assignment: Dictionary = squad_coordinator.get_assignment(
 		self,
 		active_enemies,
-		player,
+		estimated_target,
 		enemy_data,
 		ai_profile
 	)
@@ -776,7 +858,7 @@ func _update_tactical_assignment() -> void:
 
 	ai_role = StringName(assignment.get("role", &"support"))
 	ai_target_position = Vector2(
-		assignment.get("position", player.global_position)
+		assignment.get("position", estimated_target)
 	)
 	ai_can_attack = bool(assignment.get("can_attack", false))
 
@@ -789,39 +871,45 @@ func _update_tactical_assignment() -> void:
 # =========================================================
 
 func _reconsider_ai_action() -> void:
-
-	var reachable_attacks: Array[AttackData] = (
-		_get_reachable_attacks()
-	)
-
-
+	var reachable_attacks: Array[AttackData] = _get_reachable_attacks()
 	debug_hitbox_reaches_player = not reachable_attacks.is_empty()
-
-
+	var observed := perception.get_observed_combat_state()
+	var target_action := StringName(observed.get("action", &"none"))
+	var target_phase := StringName(observed.get("phase", &"none"))
+	var recognized_danger := (
+		perception.has_confirmed_visual_contact
+		and profile_can_read_telegraphs()
+		and target_action in [&"charge", &"attack"]
+		and target_phase == &"telegraph"
+	)
 	var force_reconsideration: bool = (
 		(ai_action == &"attack" and not ai_can_attack)
 		or
-		(ai_action == &"search" and perception.has_line_of_sight)
+		(ai_action == &"search" and perception.has_confirmed_visual_contact)
+		or
+		(recognized_danger and ai_action not in [&"dodge", &"interrupt", &"retreat"])
 	)
-
-
 	if not utility_brain.should_reconsider(force_reconsideration):
-
 		return
-
-
-	var maximum_health: float = maxf(
-		float(enemy_data.max_health),
-		1.0
+	var maximum_health := maxf(float(enemy_data.max_health), 1.0)
+	var maximum_stamina := maxf(enemy_data.max_stamina, 1.0)
+	var estimated_target := perception.get_estimated_target_position(true)
+	var target_facing := Vector2(observed.get("facing", Vector2.ZERO))
+	var direction_to_enemy := global_position - estimated_target
+	var target_facing_me := (
+		target_facing.length_squared() > 0.001
+		and direction_to_enemy.length_squared() > 0.001
+		and target_facing.normalized().dot(direction_to_enemy.normalized()) > 0.38
 	)
-	var maximum_stamina: float = maxf(
-		enemy_data.max_stamina,
-		1.0
-	)
-
-
+	ai_cover_candidate.clear()
+	if (
+		ai_cover_reentry_cooldown_left <= 0.0
+		and perception.has_confirmed_visual_contact
+		and ai_profile.is_capability_enabled(EnemyAIProfile.CAP_COVER)
+	):
+		ai_cover_candidate = tactical_positioning.find_best_cover(self, estimated_target, ai_profile)
 	var context: Dictionary = {
-		"visible": perception.has_line_of_sight,
+		"visible": perception.has_confirmed_visual_contact,
 		"aware": perception.is_aware,
 		"can_attack": ai_can_attack,
 		"attack_reaches": not reachable_attacks.is_empty(),
@@ -829,11 +917,37 @@ func _reconsider_ai_action() -> void:
 		"health_ratio": float(health) / maximum_health,
 		"stamina_ratio": stamina / maximum_stamina,
 		"distance": debug_distance_to_player,
-		"role": ai_role
+		"role": ai_role,
+		"target_action": target_action,
+		"target_phase": target_phase,
+		"target_facing_me": target_facing_me,
+		"inside_target_threat": debug_distance_to_player <= maxf(ai_profile.preferred_distance + ai_profile.danger_padding, 90.0),
+		"cover_available": not ai_cover_candidate.is_empty(),
+		"dash_ready": _can_ai_dash(),
+		"interrupt_reaches": _can_land_interrupt_attack()
 	}
-
-
+	var previous_action := ai_action
 	ai_action = utility_brain.decide(context)
+	if previous_action == &"cover" and ai_action != &"cover":
+		_release_reserved_cover()
+	if ai_action == &"cover" and not ai_cover_candidate.is_empty():
+		var next_cover := ai_cover_candidate.get("point") as EnemyCoverPoint
+		if ai_reserved_cover != next_cover:
+			_release_reserved_cover()
+		if next_cover != null:
+			var travel_time := global_position.distance_to(next_cover.global_position) / maxf(enemy_data.move_speed, 1.0)
+			var reservation_duration := (
+				travel_time
+				+ ai_profile.cover_hold_duration
+				+ ai_profile.maximum_commitment
+				+ 0.25
+			)
+			if next_cover.reserve(self, reservation_duration):
+				ai_reserved_cover = next_cover
+			else:
+				ai_cover_candidate.clear()
+				ai_action = &"hold"
+				utility_brain.interrupt_commitment()
 
 
 # =========================================================
@@ -858,13 +972,143 @@ func _execute_ai_action() -> void:
 			_move_or_hold(_get_retreat_position(), 12.0)
 
 		&"search":
-			_move_or_hold(perception.last_known_position, 12.0)
+			_move_or_hold(perception.get_estimated_target_position(false), 12.0)
+
+		&"circle":
+			_execute_circle_intention()
+
+		&"cover":
+			_execute_cover_intention()
+
+		&"dodge":
+			_execute_dodge_intention()
+
+		&"interrupt":
+			_execute_interrupt_intention()
 
 		_:
 			_stop_navigation()
 
 
+func _execute_circle_intention() -> void:
+	var target_position := perception.get_estimated_target_position(true)
+	var circle_position := tactical_positioning.get_circle_position(self, target_position, ai_profile)
+	_move_or_hold(circle_position, 10.0)
+
+
+func _execute_cover_intention() -> void:
+	if ai_cover_candidate.is_empty():
+		_move_or_hold(_get_retreat_position(), 14.0)
+		return
+	var cover_position := Vector2(ai_cover_candidate.get("position", global_position))
+	if global_position.distance_to(cover_position) <= COVER_ARRIVAL_TOLERANCE:
+		_begin_cover_hold()
+		return
+	_move_or_hold(cover_position, COVER_ARRIVAL_TOLERANCE)
+
+
+func _begin_cover_hold() -> void:
+	var cover_point := ai_cover_candidate.get("point") as EnemyCoverPoint
+	if not is_instance_valid(cover_point):
+		_release_reserved_cover()
+		ai_cover_candidate.clear()
+		return
+	if ai_reserved_cover != cover_point:
+		_release_reserved_cover()
+	if not cover_point.reserve(self, maxf(ai_profile.cover_hold_duration, 0.1)):
+		ai_cover_candidate.clear()
+		ai_action = &"hold"
+		utility_brain.interrupt_commitment()
+		return
+	ai_reserved_cover = cover_point
+	ai_is_holding_cover = true
+	ai_cover_hold_time_left = maxf(ai_profile.cover_hold_duration, 0.0)
+	_stop_navigation()
+	if ai_cover_hold_time_left <= 0.0:
+		_finish_cover_hold()
+
+
+func _execute_cover_hold_intention() -> void:
+	if not is_instance_valid(ai_reserved_cover):
+		_finish_cover_hold()
+		_stop_navigation()
+		return
+	var cover_position := ai_reserved_cover.global_position
+	_move_or_hold(cover_position, COVER_ARRIVAL_TOLERANCE)
+	if global_position.distance_to(cover_position) <= COVER_ARRIVAL_TOLERANCE:
+		_face_player()
+
+
+func _finish_cover_hold() -> void:
+	ai_is_holding_cover = false
+	ai_cover_hold_time_left = 0.0
+	ai_cover_reentry_cooldown_left = maxf(
+		ai_cover_reentry_cooldown_left,
+		_get_cover_reentry_delay()
+	)
+	_release_reserved_cover()
+	ai_cover_candidate.clear()
+	if ai_action == &"cover":
+		ai_action = &"hold"
+	if utility_brain != null:
+		utility_brain.interrupt_commitment()
+
+
+func _get_cover_reentry_delay() -> float:
+	if ai_profile == null:
+		return 0.35
+	return maxf(
+		maxf(0.35, ai_profile.maximum_commitment),
+		ai_profile.get_effective_decision_interval() * 2.0
+	)
+
+
+func _execute_dodge_intention() -> void:
+	var observed := perception.get_observed_combat_state()
+	var target_position := perception.get_estimated_target_position(false)
+	var target_facing := Vector2(observed.get("facing", Vector2.ZERO))
+	var dodge_direction := tactical_positioning.get_dodge_direction(self, target_position, target_facing)
+	if _can_ai_dash() and _start_ai_dash(dodge_direction):
+		return
+	_move_or_hold(global_position + dodge_direction * maxf(ai_profile.retreat_distance * 0.55, 75.0), 8.0)
+
+
+func _execute_interrupt_intention() -> void:
+	if perception == null:
+		_stop_navigation()
+		return
+	if not perception.has_confirmed_visual_contact:
+		ai_action = &"search"
+		utility_brain.interrupt_commitment()
+		_move_or_hold(perception.get_estimated_target_position(false), 12.0)
+		return
+	_face_player()
+	if _can_land_interrupt_attack():
+		_stop_navigation()
+		_start_attack(interrupt_attack)
+		return
+	_move_or_hold(perception.get_estimated_target_position(true), 8.0)
+
+
+func _can_land_interrupt_attack() -> bool:
+	if interrupt_attack == null or perception == null or not perception.has_confirmed_visual_contact:
+		return false
+	if attack_cooldown_left > 0.0 or current_attack != null:
+		return false
+	if not _can_afford_attack(interrupt_attack):
+		return false
+	return _attack_reaches_estimated_target(interrupt_attack, _get_attack_direction())
+
+
 func _execute_attack_intention() -> void:
+	if perception == null:
+		_stop_navigation()
+		return
+	if not perception.has_confirmed_visual_contact:
+		ai_action = &"search"
+		utility_brain.interrupt_commitment()
+		_move_or_hold(perception.get_estimated_target_position(false), 12.0)
+		return
 
 	_face_player()
 
@@ -914,12 +1158,7 @@ func _move_or_hold(target_position: Vector2, tolerance: float) -> void:
 
 func _get_retreat_position() -> Vector2:
 
-	var danger_position: Vector2 = perception.last_known_position
-
-
-	if perception.has_line_of_sight:
-
-		danger_position = player.global_position
+	var danger_position: Vector2 = perception.get_estimated_target_position(true)
 
 
 	var away_direction: Vector2 = global_position - danger_position
@@ -951,7 +1190,7 @@ func _update_ai_debug_label() -> void:
 	var awareness: String = "MEM"
 
 
-	if perception != null and perception.has_line_of_sight:
+	if perception != null and perception.has_confirmed_visual_contact:
 
 		awareness = "VISION"
 
@@ -970,6 +1209,14 @@ func _update_ai_debug_label() -> void:
 		+ String(ai_action).to_upper()
 		+ " | "
 		+ awareness
+		+ "\nIQ "
+		+ str(roundi(ai_profile.intelligence_percent))
+		+ "% | CONF "
+		+ str(roundi(utility_brain.last_decision_confidence * 100.0))
+		+ "% | OBS "
+		+ str(roundi(perception.observation_confidence * 100.0))
+		+ "%"
+		+ (" | ERROR" if utility_brain.last_was_mistake else "")
 	)
 
 
@@ -993,6 +1240,176 @@ func _update_ai_debug_label() -> void:
 		if not score_parts.is_empty():
 
 			debug_ai_label.text += "\n" + " ".join(score_parts)
+
+
+# =========================================================
+# MOVILIDAD Y REACCIONES TÁCTICAS
+# =========================================================
+
+func profile_can_read_telegraphs() -> bool:
+	return ai_profile != null and ai_profile.is_capability_enabled(EnemyAIProfile.CAP_READ_TELEGRAPHS)
+
+
+func _update_ai_mobility_timers(delta: float) -> void:
+	ai_dash_cooldown_left = maxf(ai_dash_cooldown_left - delta, 0.0)
+	ai_reactive_cancel_cooldown_left = maxf(ai_reactive_cancel_cooldown_left - delta, 0.0)
+	ai_cover_reentry_cooldown_left = maxf(ai_cover_reentry_cooldown_left - delta, 0.0)
+	if ai_is_holding_cover and not is_instance_valid(ai_reserved_cover):
+		_finish_cover_hold()
+	elif (
+		ai_is_holding_cover
+		and knockback_velocity == Vector2.ZERO
+		and stagger_recovery_time_left <= 0.0
+		and global_position.distance_to(ai_reserved_cover.global_position)
+		<= COVER_ARRIVAL_TOLERANCE
+	):
+		ai_cover_hold_time_left = maxf(ai_cover_hold_time_left - delta, 0.0)
+		if ai_cover_hold_time_left <= 0.0:
+			_finish_cover_hold()
+
+
+func _can_ai_dash() -> bool:
+	if enemy_data == null or ai_profile == null:
+		return false
+	if not enemy_data.can_dash or not ai_profile.is_capability_enabled(EnemyAIProfile.CAP_DASH):
+		return false
+	if ai_dash_cooldown_left > 0.0 or ai_dash_time_left > 0.0 or current_attack != null:
+		return false
+	return not enemy_data.uses_stamina or stamina >= enemy_data.dash_stamina_cost
+
+
+func _start_ai_dash(desired_direction: Vector2) -> bool:
+	if not _can_ai_dash() or desired_direction.length_squared() < 0.001:
+		return false
+	var base_direction := desired_direction.normalized()
+	var candidates: Array[Vector2] = [
+		base_direction,
+		base_direction.rotated(PI * 0.25),
+		base_direction.rotated(-PI * 0.25),
+		base_direction.rotated(PI * 0.5),
+		base_direction.rotated(-PI * 0.5)
+	]
+	var dash_distance := enemy_data.dash_speed * enemy_data.dash_duration
+	var selected := Vector2.ZERO
+	for candidate: Vector2 in candidates:
+		if _is_ai_dash_path_safe(candidate, dash_distance):
+			selected = candidate
+			break
+	if selected == Vector2.ZERO:
+		return false
+	_stop_navigation()
+	ai_dash_direction = selected
+	ai_dash_time_left = enemy_data.dash_duration
+	ai_dash_cooldown_left = enemy_data.dash_cooldown
+	if enemy_data.uses_stamina:
+		stamina = maxf(stamina - enemy_data.dash_stamina_cost, 0.0)
+		stamina_regen_delay_left = enemy_data.stamina_regen_delay
+	enemy_animated.self_modulate = Color(0.72, 0.9, 1.25, 1.0)
+	return true
+
+
+func _is_ai_dash_path_safe(direction: Vector2, distance: float) -> bool:
+	var motion := direction.normalized() * distance
+	if test_move(global_transform, motion):
+		return false
+	var destination := global_position + motion
+	var navigation_map := navigation_agent.get_navigation_map()
+	if navigation_map.is_valid() and not NavigationServer2D.map_get_regions(navigation_map).is_empty():
+		var closest_navigation_point := NavigationServer2D.map_get_closest_point(
+			navigation_map,
+			destination
+		)
+		if closest_navigation_point.distance_to(destination) > 14.0:
+			return false
+	for node: Node in get_tree().get_nodes_in_group("enemies"):
+		if node == self or not node is Node2D:
+			continue
+		if node.has_method("is_enemy_alive") and not bool(node.call("is_enemy_alive")):
+			continue
+		var closest_on_dash := Geometry2D.get_closest_point_to_segment(
+			(node as Node2D).global_position,
+			global_position,
+			destination
+		)
+		var required_spacing := enemy_data.avoidance_radius * 1.7
+		var other_data := node.get("enemy_data") as EnemyData
+		if other_data != null:
+			required_spacing += other_data.avoidance_radius * 0.65
+		if closest_on_dash.distance_to((node as Node2D).global_position) < required_spacing:
+			return false
+	return true
+
+
+func _process_ai_dash(delta: float) -> void:
+	ai_dash_time_left = maxf(ai_dash_time_left - delta, 0.0)
+	velocity = ai_dash_direction * enemy_data.dash_speed
+	_update_facing(ai_dash_direction)
+	_play_action_animation("walk")
+	move_and_slide()
+	if ai_dash_time_left <= 0.0:
+		ai_dash_direction = Vector2.ZERO
+		velocity = Vector2.ZERO
+		enemy_animated.self_modulate = Color.WHITE
+		utility_brain.interrupt_commitment()
+
+
+func _cancel_ai_dash() -> void:
+	if ai_dash_time_left <= 0.0:
+		return
+	ai_dash_time_left = 0.0
+	ai_dash_direction = Vector2.ZERO
+	velocity = Vector2.ZERO
+	if enemy_animated != null:
+		enemy_animated.self_modulate = Color.WHITE
+	if utility_brain != null:
+		utility_brain.interrupt_commitment()
+
+
+func _try_reactive_attack_cancel() -> bool:
+	if not enemy_data.can_cancel_attack_windup or ai_reactive_cancel_cooldown_left > 0.0:
+		return false
+	if current_attack == interrupt_attack or ai_action == &"interrupt":
+		return false
+	if current_attack_phase != "windup" or not profile_can_read_telegraphs():
+		return false
+	if perception == null or not perception.has_confirmed_visual_contact:
+		return false
+	if not ai_profile.is_capability_enabled(EnemyAIProfile.CAP_DODGE):
+		return false
+	var observed := perception.get_observed_combat_state()
+	if StringName(observed.get("source", &"none")) != &"vision":
+		return false
+	if StringName(observed.get("action", &"none")) != &"charge":
+		return false
+	var target_facing := Vector2(observed.get("facing", Vector2.ZERO))
+	var target_to_enemy := global_position - perception.get_estimated_target_position(false)
+	if (
+		target_facing.length_squared() < 0.001
+		or target_to_enemy.length_squared() < 0.001
+		or target_facing.normalized().dot(target_to_enemy.normalized()) <= 0.38
+	):
+		return false
+	var perceived_distance := global_position.distance_to(
+		perception.get_estimated_target_position(false)
+	)
+	if perceived_distance > maxf(ai_profile.preferred_distance + ai_profile.danger_padding, 105.0):
+		return false
+	if enemy_data.uses_stamina and stamina < enemy_data.reactive_cancel_stamina_cost:
+		return false
+	_cancel_current_attack()
+	if enemy_data.uses_stamina:
+		stamina = maxf(stamina - enemy_data.reactive_cancel_stamina_cost, 0.0)
+	ai_reactive_cancel_cooldown_left = enemy_data.reactive_cancel_cooldown
+	utility_brain.interrupt_commitment()
+	ai_action = &"dodge"
+	_execute_dodge_intention()
+	return true
+
+
+func _release_reserved_cover() -> void:
+	if is_instance_valid(ai_reserved_cover):
+		ai_reserved_cover.release(self)
+	ai_reserved_cover = null
 
 
 # =========================================================
@@ -1159,6 +1576,8 @@ func _get_available_attacks() -> Array[AttackData]:
 	if (
 		enemy_data.can_use_heavy_attacks
 		and
+		ai_profile.is_capability_enabled(EnemyAIProfile.CAP_HEAVY_ATTACK)
+		and
 		heavy_attack != null
 		and
 		_can_afford_attack(
@@ -1177,6 +1596,8 @@ func _get_available_attacks() -> Array[AttackData]:
 
 	if (
 		enemy_data.can_use_charged_attacks
+		and
+		ai_profile.is_capability_enabled(EnemyAIProfile.CAP_CHARGED_ATTACK)
 		and
 		charged_attack != null
 		and
@@ -1200,6 +1621,8 @@ func _get_available_attacks() -> Array[AttackData]:
 func _get_reachable_attacks() -> Array[AttackData]:
 
 	var reachable: Array[AttackData] = []
+	if perception == null or not perception.has_confirmed_visual_contact:
+		return reachable
 
 
 	var attacks: Array[AttackData] = (
@@ -1214,7 +1637,7 @@ func _get_reachable_attacks() -> Array[AttackData]:
 
 	for attack: AttackData in attacks:
 
-		if _attack_hitbox_reaches_player(
+		if _attack_reaches_estimated_target(
 			attack,
 			direction
 		):
@@ -1243,13 +1666,12 @@ func _choose_attack(
 	var best_attack: AttackData = candidates[0]
 	var best_score: float = -INF
 	var target_is_committed: bool = false
-
-
-	if is_instance_valid(player):
-
-		target_is_committed = float(
-			player.get("attack_action_time_left")
-		) > 0.15
+	if ai_profile.is_capability_enabled(EnemyAIProfile.CAP_ADAPT_ATTACKS):
+		var observed := perception.get_observed_combat_state()
+		target_is_committed = (
+			StringName(observed.get("action", &"none")) in [&"charge", &"attack"]
+			or StringName(observed.get("phase", &"none")) == &"recovery"
+		)
 
 
 	for attack: AttackData in candidates:
@@ -1297,7 +1719,8 @@ func _choose_attack(
 
 		# Variación pequeña: evita secuencias perfectamente
 		# deterministas sin destruir la intención táctica.
-		score += randf_range(-0.06, 0.06)
+		var attack_noise := ai_profile.get_decision_noise() * 0.35
+		score += ai_random.randf_range(-attack_noise, attack_noise)
 
 
 		if score > best_score:
@@ -1554,6 +1977,21 @@ func _resolve_current_attack_hit() -> void:
 				enemy_data.enemy_name,
 				" FALLA ",
 				current_attack.attack_name
+			)
+
+
+		return
+
+
+	if not _has_clear_attack_line_to_player():
+
+		if debug_combat:
+
+			print(
+				enemy_data.enemy_name,
+				" FALLA ",
+				current_attack.attack_name,
+				" | OBSTÁCULO"
 			)
 
 
@@ -1997,12 +2435,10 @@ func _update_attack_hitbox(
 
 func _get_attack_direction() -> Vector2:
 
-	if is_instance_valid(
-		player
-	):
+	if perception != null and perception.is_aware:
 
 		var direction_to_player: Vector2 = (
-			player.global_position
+			perception.get_estimated_target_position(true)
 			- global_position
 		)
 
@@ -2054,6 +2490,36 @@ func _get_attack_direction() -> Vector2:
 
 
 	return Vector2.DOWN
+
+
+# =========================================================
+# ¿ATAQUE ALCANZA LA ESTIMACIÓN PERCIBIDA?
+# =========================================================
+
+func _attack_reaches_estimated_target(
+	attack: AttackData,
+	direction: Vector2 = Vector2.ZERO
+) -> bool:
+	if attack == null or perception == null or not perception.is_aware:
+		return false
+	var attack_direction := direction
+	if attack_direction.length_squared() < 0.001:
+		attack_direction = _get_attack_direction()
+	if attack_direction.length_squared() < 0.001:
+		return false
+	attack_direction = attack_direction.normalized()
+	var target_offset := perception.get_estimated_target_position(true) - global_position
+	var forward_distance := target_offset.dot(attack_direction)
+	var lateral_distance := absf(target_offset.dot(attack_direction.orthogonal()))
+	var target_radius := maxf(ai_profile.target_radius_estimate, 0.0)
+	var minimum_forward := attack.hitbox_start_offset - target_radius
+	var maximum_forward := attack.hitbox_start_offset + attack.hitbox_length + target_radius
+	var maximum_lateral := attack.hitbox_width * 0.5 + target_radius
+	return (
+		forward_distance >= minimum_forward
+		and forward_distance <= maximum_forward
+		and lateral_distance <= maximum_lateral
+	)
 
 
 # =========================================================
@@ -2169,6 +2635,28 @@ func _attack_hitbox_reaches_player(
 				)
 
 
+	return false
+
+
+func _has_clear_attack_line_to_player() -> bool:
+	if not is_instance_valid(player):
+		return false
+	var query := PhysicsRayQueryParameters2D.create(
+		global_position,
+		player.global_position,
+		attack_collision_mask,
+		[get_rid()]
+	)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return true
+	var collider := hit.get("collider") as Node
+	while collider != null:
+		if collider == player or collider.is_in_group("player"):
+			return true
+		collider = collider.get_parent()
 	return false
 
 
@@ -2356,15 +2844,13 @@ func _direction_to_cardinal_facing(
 
 func _face_player() -> void:
 
-	if not is_instance_valid(
-		player
-	):
+	if perception == null or not perception.is_aware:
 
 		return
 
 
 	var direction_to_player: Vector2 = (
-		player.global_position
+		perception.get_estimated_target_position(true)
 		- global_position
 	)
 
@@ -2442,9 +2928,9 @@ func _setup_action_animations() -> void:
 		return
 
 
-	# Por ahora Goblin es el único arquetipo visual. Cuando aparezcan
-	# enemigos nuevos, estas hojas pasarán a EnemyData por especie.
-	if enemy_data == null or enemy_data.enemy_name != "Goblin":
+	# El nombre visible cambia por variante; la familia de animación es un dato
+	# físico estable y no una comparación frágil de texto localizado.
+	if enemy_data == null or enemy_data.animation_family != &"goblin":
 
 		return
 
@@ -2488,377 +2974,6 @@ func _play_action_animation(animation_prefix: String) -> void:
 
 
 # =========================================================
-# COMBATE GRUPAL
-# =========================================================
-
-func _get_combat_info() -> Dictionary:
-
-	var result: Dictionary = {
-		"position": player.global_position,
-		"can_attack": false
-	}
-
-
-	var active_enemies: Array[Node] = (
-		_get_active_enemies()
-	)
-
-
-	if active_enemies.is_empty():
-
-		return result
-
-
-	active_enemies.sort_custom(
-		_sort_enemies_by_distance_to_player
-	)
-
-
-	var my_index: int = (
-		active_enemies.find(
-			self
-		)
-	)
-
-
-	if my_index < 0:
-
-		return result
-
-
-	var enemy_count: int = (
-		active_enemies.size()
-	)
-
-
-	var attacker_count: int = mini(
-		enemy_data.max_simultaneous_attackers,
-		enemy_count
-	)
-
-
-	if my_index < attacker_count:
-
-		var attackers: Array[Node] = []
-
-
-		for index: int in range(
-			attacker_count
-		):
-
-			attackers.append(
-				active_enemies[index]
-			)
-
-
-		var assignments: Dictionary = (
-			_build_slot_assignments(
-				attackers,
-				enemy_data.attack_slot_radius,
-				maxi(
-					enemy_data.attack_slot_count,
-					attacker_count
-				),
-				0.0
-			)
-		)
-
-
-		var my_id: int = (
-			get_instance_id()
-		)
-
-
-		if assignments.has(
-			my_id
-		):
-
-			result["position"] = (
-				assignments[
-					my_id
-				]
-			)
-
-
-		result["can_attack"] = true
-
-		return result
-
-
-	var waiting_enemies: Array[Node] = []
-
-
-	for index: int in range(
-		attacker_count,
-		enemy_count
-	):
-
-		waiting_enemies.append(
-			active_enemies[index]
-		)
-
-
-	if waiting_enemies.is_empty():
-
-		return result
-
-
-	var safe_waiting_slot_count: int = maxi(
-		enemy_data.waiting_slot_count,
-		waiting_enemies.size()
-	)
-
-
-	var waiting_angle_offset: float = (
-		PI
-		/ float(
-			safe_waiting_slot_count
-		)
-	)
-
-
-	var waiting_assignments: Dictionary = (
-		_build_slot_assignments(
-			waiting_enemies,
-			enemy_data.waiting_slot_radius,
-			safe_waiting_slot_count,
-			waiting_angle_offset
-		)
-	)
-
-
-	var my_waiting_id: int = (
-		get_instance_id()
-	)
-
-
-	if waiting_assignments.has(
-		my_waiting_id
-	):
-
-		result["position"] = (
-			waiting_assignments[
-				my_waiting_id
-			]
-		)
-
-
-	return result
-
-
-# =========================================================
-# SLOTS
-# =========================================================
-
-func _build_slot_assignments(
-	enemies: Array[Node],
-	radius: float,
-	slot_count: int,
-	angle_offset: float
-) -> Dictionary:
-
-	var assignments: Dictionary = {}
-
-
-	if not is_instance_valid(
-		player
-	):
-
-		return assignments
-
-
-	if enemies.is_empty():
-
-		return assignments
-
-
-	slot_count = maxi(
-		slot_count,
-		enemies.size()
-	)
-
-
-	var available_slots: Array[int] = []
-
-
-	for slot_index: int in range(
-		slot_count
-	):
-
-		available_slots.append(
-			slot_index
-		)
-
-
-	for enemy: Node in enemies:
-
-		if not is_instance_valid(
-			enemy
-		):
-
-			continue
-
-
-		if not enemy is Node2D:
-
-			continue
-
-
-		if available_slots.is_empty():
-
-			break
-
-
-		var enemy_2d: Node2D = (
-			enemy as Node2D
-		)
-
-
-		var approach_direction: Vector2 = (
-			enemy_2d.global_position
-			- player.global_position
-		)
-
-
-		if approach_direction.length_squared() < 0.001:
-
-			approach_direction = (
-				Vector2.RIGHT
-			)
-
-		else:
-
-			approach_direction = (
-				approach_direction.normalized()
-			)
-
-
-		var best_slot: int = (
-			available_slots[0]
-		)
-
-		var best_score: float = -INF
-
-
-		for slot_index: int in available_slots:
-
-			var angle: float = (
-				angle_offset
-				+ TAU
-				* float(
-					slot_index
-				)
-				/ float(
-					slot_count
-				)
-			)
-
-
-			var slot_direction: Vector2 = (
-				Vector2.RIGHT.rotated(
-					angle
-				)
-			)
-
-
-			var score: float = (
-				approach_direction.dot(
-					slot_direction
-				)
-			)
-
-
-			if score > best_score:
-
-				best_score = score
-
-				best_slot = slot_index
-
-
-		var chosen_angle: float = (
-			angle_offset
-			+ TAU
-			* float(
-				best_slot
-			)
-			/ float(
-				slot_count
-			)
-		)
-
-
-		var chosen_direction: Vector2 = (
-			Vector2.RIGHT.rotated(
-				chosen_angle
-			)
-		)
-
-
-		assignments[
-			enemy.get_instance_id()
-		] = (
-			player.global_position
-			+ chosen_direction
-			* radius
-		)
-
-
-		available_slots.erase(
-			best_slot
-		)
-
-
-	return assignments
-
-
-# =========================================================
-# ENEMIGOS ACTIVOS
-# =========================================================
-
-func _get_active_enemies() -> Array[Node]:
-
-	var all_enemies: Array[Node] = (
-		get_tree().get_nodes_in_group(
-			"enemies"
-		)
-	)
-
-
-	var active_enemies: Array[Node] = []
-
-
-	for enemy: Node in all_enemies:
-
-		if not is_instance_valid(
-			enemy
-		):
-
-			continue
-
-
-		if not enemy is Node2D:
-
-			continue
-
-
-		if enemy.has_method(
-			"is_combat_active"
-		):
-
-			if not enemy.is_combat_active():
-
-				continue
-
-
-		active_enemies.append(
-			enemy
-		)
-
-
-	return active_enemies
-
-
-# =========================================================
 # COMBAT ACTIVE
 # =========================================================
 
@@ -2874,16 +2989,6 @@ func is_combat_active() -> bool:
 		return false
 
 
-	if knockback_velocity != Vector2.ZERO:
-
-		return false
-
-
-	if stagger_recovery_time_left > 0.0:
-
-		return false
-
-
 	if not is_instance_valid(
 		player
 	):
@@ -2895,64 +3000,6 @@ func is_combat_active() -> bool:
 		perception != null
 		and
 		perception.is_aware
-	)
-
-
-# =========================================================
-# ORDEN DISTANCIA
-# =========================================================
-
-func _sort_enemies_by_distance_to_player(
-	a: Node,
-	b: Node
-) -> bool:
-
-	if not is_instance_valid(
-		player
-	):
-
-		return false
-
-
-	var enemy_a: Node2D = (
-		a as Node2D
-	)
-
-	var enemy_b: Node2D = (
-		b as Node2D
-	)
-
-
-	var distance_a: float = (
-		enemy_a.global_position.distance_squared_to(
-			player.global_position
-		)
-	)
-
-
-	var distance_b: float = (
-		enemy_b.global_position.distance_squared_to(
-			player.global_position
-		)
-	)
-
-
-	if absf(
-		distance_a
-		- distance_b
-	) < 1.0:
-
-		return (
-			a.get_instance_id()
-			<
-			b.get_instance_id()
-		)
-
-
-	return (
-		distance_a
-		<
-		distance_b
 	)
 
 
@@ -3316,6 +3363,9 @@ func _apply_knockback(
 		return
 
 
+	_cancel_ai_dash()
+
+
 	# =====================================================
 	# CANCELAR ATAQUE POR IMPACTO FUERTE
 	# =====================================================
@@ -3383,6 +3433,7 @@ func die() -> void:
 
 
 	is_dying = true
+	_release_reserved_cover()
 
 	print(
 		enemy_data.enemy_name,
@@ -3471,7 +3522,7 @@ func _draw() -> void:
 
 	var player_local: Vector2 = (
 		to_local(
-			player.global_position
+			perception.get_estimated_target_position(false)
 		)
 	)
 
@@ -3599,7 +3650,7 @@ func _draw_perception_debug() -> void:
 	)
 
 
-	if perception.has_line_of_sight:
+	if perception.has_confirmed_visual_contact:
 
 		perception_color = Color(1.0, 0.2, 0.15, 0.8)
 
@@ -3640,7 +3691,7 @@ func _draw_perception_debug() -> void:
 	)
 
 
-	if perception.is_aware and not perception.has_line_of_sight:
+	if perception.is_aware and not perception.has_confirmed_visual_contact:
 
 		var memory_local: Vector2 = to_local(
 			perception.last_known_position

@@ -8,76 +8,96 @@
 [ext_resource type="Script" uid="uid://cxu1neicw7nyp" path="res://scripts/tutorial/first_encounter_controller.gd" id="6_controller"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/ivar/ivar.tscn" id="7_ivar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/world_map_ui.tscn" id="9_map"]
-[ext_resource type="PackedScene" uid="uid://e81fugeluhil" path="res://scenes/enemies/goblin/goblin.tscn" id="10_goblin"]
+[ext_resource type="PackedScene" uid="uid://1gu8xn8fedft" path="res://scenes/enemies/goblin/goblin_common.tscn" id="10_goblin_common"]
 [ext_resource type="PackedScene" path="res://scenes/items/gatherable_resource.tscn" id="11_gather"]
 [ext_resource type="Resource" path="res://data/items/materials/wild_berries.tres" id="12_berries"]
 [ext_resource type="Resource" path="res://data/items/materials/field_fibers.tres" id="13_fibers"]
 [ext_resource type="Resource" path="res://data/items/materials/rust_scrap.tres" id="14_scrap"]
+[ext_resource type="Resource" path="res://data/npcs/nara.tres" id="15_nara_data"]
+[ext_resource type="PackedScene" path="res://scenes/tutorial/investigation_point.tscn" id="16_investigation"]
+[ext_resource type="Script" uid="uid://cj2awt78n4i7e" path="res://scripts/enemies/ai/enemy_cover_point.gd" id="17_cover"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin_elite.tscn" id="18_goblin_elite"]
 
 [node name="FirstEncounter" type="Node2D" unique_id=455872762]
 
 [node name="World" parent="." unique_id=1648102418 instance=ExtResource("1_world")]
 
-[node name="Player" parent="World/Environment" index="0"]
+[node name="Player" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="0" unique_id=1164395281]
 position = Vector2(1010, 545)
 
-[node name="FrontierEnvironment" parent="World/Environment" index="1" instance=ExtResource("5_environment")]
+[node name="FrontierEnvironment" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="1" unique_id=1970482520 instance=ExtResource("5_environment")]
 
-[node name="Maela" parent="World/Environment" index="2" instance=ExtResource("2_maela")]
-position = Vector2(930, 505)
+[node name="Maela" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="2" unique_id=2145107870 instance=ExtResource("2_maela")]
 modulate = Color(0.72, 0.68, 0.61, 1)
+position = Vector2(930, 505)
 
-[node name="InteractionPrompt" parent="World/Environment/Maela" index="3"]
-text = "[F] Hablar con Maela"
-
-[node name="Ivar" parent="World/Environment" index="3" instance=ExtResource("7_ivar")]
-position = Vector2(1085, 475)
+[node name="Ivar" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="3" unique_id=649074478 instance=ExtResource("7_ivar")]
 modulate = Color(0.68, 0.64, 0.57, 1)
+position = Vector2(1085, 475)
 
-[node name="InteractionPrompt" parent="World/Environment/Ivar" index="3"]
-text = "[F] Pedir equipo a Ivar"
-
-[node name="Nara" parent="World/Environment" index="4" instance=ExtResource("2_maela")]
+[node name="Nara" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="4" unique_id=975195898 instance=ExtResource("2_maela")]
+modulate = Color(0.6, 0.57, 0.52, 1)
 position = Vector2(1185, 550)
-modulate = Color(0.60, 0.57, 0.52, 1)
+npc_data = ExtResource("15_nara_data")
 
-[node name="CharacterSprite" parent="World/Environment/Nara" index="0"]
-modulate = Color(0.72, 0.62, 0.50, 1)
-
-[node name="InteractionPrompt" parent="World/Environment/Nara" index="3"]
-text = "[F] Hablar con Nara"
-
-[node name="GoblinScout" parent="World/Environment" index="5" instance=ExtResource("10_goblin")]
+[node name="GoblinScout" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="5" unique_id=1397102588 instance=ExtResource("10_goblin_common")]
 position = Vector2(3180, 760)
 
-[node name="GoblinForager" parent="World/Environment" index="6" instance=ExtResource("10_goblin")]
+[node name="GoblinForager" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="6" unique_id=313372936 instance=ExtResource("10_goblin_common")]
 position = Vector2(3310, 835)
 
-[node name="GoblinGuard" parent="World/Environment" index="7" instance=ExtResource("10_goblin")]
+[node name="GoblinGuard" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="7" unique_id=2131793348 instance=ExtResource("18_goblin_elite")]
 position = Vector2(3420, 720)
 
-[node name="WildBerries" parent="World/Environment" index="8" instance=ExtResource("11_gather")]
+[node name="WildBerries" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="8" unique_id=672129411 instance=ExtResource("11_gather")]
 position = Vector2(1590, 665)
 item_data = ExtResource("12_berries")
 quantity = 4
 
-[node name="FieldFibers" parent="World/Environment" index="9" instance=ExtResource("11_gather")]
+[node name="FieldFibers" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="9" unique_id=2112727618 instance=ExtResource("11_gather")]
 position = Vector2(1980, 830)
 item_data = ExtResource("13_fibers")
 quantity = 6
 
-[node name="RustScrap" parent="World/Environment" index="10" instance=ExtResource("11_gather")]
+[node name="RustScrap" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="10" unique_id=2084643502 instance=ExtResource("11_gather")]
 position = Vector2(2380, 690)
 item_data = ExtResource("14_scrap")
 quantity = 3
 
-[node name="DialogueUI" parent="." instance=ExtResource("3_dialogue")]
+[node name="CouncilInvestigation" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="11" unique_id=1563453415 instance=ExtResource("16_investigation")]
+position = Vector2(3660, 1120)
+point_id = &"council_investigation"
 
-[node name="QuestTracker" parent="." instance=ExtResource("4_quest")]
+[node name="CoverWestRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="12" unique_id=1272591386]
+position = Vector2(3185, 720)
+script = ExtResource("17_cover")
+cover_quality = 1.15
+designer_confirmed_cover = false
 
-[node name="WorldMapUI" parent="." instance=ExtResource("9_map")]
+[node name="CoverNorthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="13" unique_id=1184314397]
+position = Vector2(3385, 600)
+script = ExtResource("17_cover")
+designer_confirmed_cover = false
 
-[node name="TutorialController" type="Node" parent="."]
+[node name="CoverEastRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="14" unique_id=1040767305]
+position = Vector2(3495, 790)
+script = ExtResource("17_cover")
+cover_quality = 1.25
+designer_confirmed_cover = false
+
+[node name="CoverSouthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="15" unique_id=337251374]
+position = Vector2(3395, 1010)
+script = ExtResource("17_cover")
+cover_quality = 0.9
+designer_confirmed_cover = false
+
+[node name="DialogueUI" parent="." unique_id=285740213 instance=ExtResource("3_dialogue")]
+
+[node name="QuestTracker" parent="." unique_id=604420702 instance=ExtResource("4_quest")]
+
+[node name="WorldMapUI" parent="." unique_id=1728551945 instance=ExtResource("9_map")]
+
+[node name="TutorialController" type="Node" parent="." unique_id=1461904681]
 script = ExtResource("6_controller")
 
 [editable path="World"]

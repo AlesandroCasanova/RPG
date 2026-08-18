@@ -1,13 +1,15 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/npcs/tutorial_npc.gd" id="1_npc"]
 [ext_resource type="Texture2D" path="res://assets/characters/npcs/ivar/ivar_poor.png" id="2_ivar"]
+[ext_resource type="Resource" path="res://data/npcs/ivar.tres" id="3_data"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_interaction"]
 radius = 68.0
 
 [node name="Ivar" type="Area2D"]
 script = ExtResource("1_npc")
+npc_data = ExtResource("3_data")
 
 [node name="CharacterSprite" type="Sprite2D" parent="."]
 position = Vector2(0, -58)

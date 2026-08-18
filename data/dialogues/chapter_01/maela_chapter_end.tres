@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://c151ilqosslxa"]
+
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_gkj51"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+text = "Volviste con una respuesta, aunque no sea la que queríamos escuchar. La expansión es real."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+text = "Tu decisión en el consejo marcará cómo se prepara el refugio. Desde hoy ya no sos solamente un recolector, {player_name}."
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"chapter_end"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2")])

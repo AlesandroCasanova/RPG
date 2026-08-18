@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_data.gd" id="1_npc"]
+[ext_resource type="Texture2D" path="res://assets/characters/npcs/ivar/ivar_poor.png" id="2_portrait"]
+[ext_resource type="Resource" path="res://data/dialogues/chapter_01/ivar_equipment.tres" id="3_dialogue"]
+
+[resource]
+script = ExtResource("1_npc")
+npc_id = &"ivar"
+display_name = "Ivar"
+portrait = ExtResource("2_portrait")
+interaction_text = "[F] Pedir equipo a {name}"
+dialogues = Array[DialogueData]([ExtResource("3_dialogue")])
+

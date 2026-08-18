@@ -294,3 +294,67 @@ func _apply_equipment_bonuses() -> void:
 		player.apply_equipment_bonuses(
 			get_total_bonuses()
 		)
+
+
+func get_save_data() -> Dictionary:
+	var saved_stacks: Array[Dictionary] = []
+	for stack: Dictionary in stacks:
+		var item := stack.get("item") as ItemData
+		if item != null:
+			saved_stacks.append({"path": item.resource_path, "quantity": int(stack.get("quantity", 1))})
+	var saved_quick_slots: Array[Variant] = []
+	for value: Variant in quick_slots:
+		if value is Dictionary:
+			var stack := value as Dictionary
+			var item := stack.get("item") as ItemData
+			saved_quick_slots.append(
+				{"path": item.resource_path, "quantity": int(stack.get("quantity", 1))}
+				if item != null else null
+			)
+		else:
+			saved_quick_slots.append(null)
+	var saved_equipment: Dictionary = {}
+	for slot_variant: Variant in equipped:
+		var item := equipped[slot_variant] as ItemData
+		if item != null:
+			saved_equipment[str(int(slot_variant))] = item.resource_path
+	return {
+		"stacks": saved_stacks,
+		"quick_slots": saved_quick_slots,
+		"equipped": saved_equipment
+	}
+
+
+func load_save_data(data: Dictionary) -> void:
+	stacks.clear()
+	quick_slots = [null, null, null, null, null, null]
+	for slot_variant: Variant in equipped:
+		equipped[slot_variant] = null
+	for saved_stack_variant: Variant in Array(data.get("stacks", [])):
+		var saved_stack := Dictionary(saved_stack_variant)
+		var item := _load_item(String(saved_stack.get("path", "")))
+		if item != null:
+			stacks.append({"item": item, "quantity": int(saved_stack.get("quantity", 1))})
+	var saved_quick := Array(data.get("quick_slots", []))
+	for index: int in mini(saved_quick.size(), quick_slots.size()):
+		if saved_quick[index] == null:
+			continue
+		var saved_stack := Dictionary(saved_quick[index])
+		var item := _load_item(String(saved_stack.get("path", "")))
+		if item != null:
+			quick_slots[index] = {"item": item, "quantity": int(saved_stack.get("quantity", 1))}
+	var saved_equipment := Dictionary(data.get("equipped", {}))
+	for slot_key: String in saved_equipment:
+		var item := _load_item(String(saved_equipment[slot_key]))
+		if item != null:
+			equipped[int(slot_key)] = item
+	_apply_equipment_bonuses()
+	inventory_changed.emit()
+	equipment_changed.emit()
+	quick_slots_changed.emit()
+
+
+func _load_item(path: String) -> ItemData:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return ResourceLoader.load(path) as ItemData

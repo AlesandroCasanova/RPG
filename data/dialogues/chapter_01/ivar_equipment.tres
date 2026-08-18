@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://bd5feddv2mpus"]
+
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_mqeig"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+text = "No pongas esa cara. La espada está mellada, pero todavía corta. Las botas pertenecieron a tres recolectores antes que a vos."
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+text = "No hay casco, guantes ni coraza para darte. Si volvés con recursos, quizá podamos fabricar algo que sí sea tuyo."
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+text = "Abrí la mochila con I. Arrastrá cada pieza sobre su silueta para equiparla."
+
+[resource]
+script = ExtResource("1_data")
+dialogue_id = &"equipment"
+entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])

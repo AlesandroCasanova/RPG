@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://d4cqi1mr3kfcf"]
+
+[ext_resource type="Script" uid="uid://bqmn1j27q23ip" path="res://scripts/enemies/base/enemy_data.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://i0w7so0p1l80" path="res://scripts/items/loot_entry.gd" id="2_loot"]
+[ext_resource type="Resource" path="res://data/items/materials/goblin_shard.tres" id="3_shard"]
+[ext_resource type="Resource" path="res://data/items/equipment/rusted_sword.tres" id="4_sword"]
+
+[sub_resource type="Resource" id="Loot_shard"]
+script = ExtResource("2_loot")
+item = ExtResource("3_shard")
+min_quantity = 2
+max_quantity = 4
+
+[sub_resource type="Resource" id="Loot_sword"]
+script = ExtResource("2_loot")
+item = ExtResource("4_sword")
+drop_chance = 0.3
+
+[resource]
+script = ExtResource("1_enemy")
+enemy_name = "Goblin élite"
+animation_family = &"goblin"
+max_health = 150
+move_speed = 125.0
+can_use_heavy_attacks = true
+uses_stamina = true
+max_stamina = 125.0
+stamina_regen_delay = 0.75
+squad_id = &"goblin_warband"
+coordination_radius = 600.0
+loot_table = Array[ExtResource("2_loot")]([SubResource("Loot_shard"), SubResource("Loot_sword")])
+knockback_force = 125.0
+knockback_resistance = 0.2
+stagger_threshold = 195.0
+stagger_force_for_max_duration = 430.0
+avoidance_radius = 24.0

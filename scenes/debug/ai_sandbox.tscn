@@ -1,0 +1,64 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="PackedScene" path="res://world.tscn" id="1_world"]
+[ext_resource type="PackedScene" path="res://scenes/tutorial/frontier_environment.tscn" id="2_environment"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin_common.tscn" id="3_common"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin_elite.tscn" id="4_elite"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin_boss.tscn" id="5_boss"]
+[ext_resource type="Script" path="res://scripts/enemies/ai/enemy_cover_point.gd" id="6_cover"]
+
+[node name="AISandbox" type="Node2D"]
+
+[node name="World" parent="." instance=ExtResource("1_world")]
+
+[node name="Player" parent="World/Environment" index="0"]
+position = Vector2(1700, 780)
+
+[node name="ArenaEnvironment" parent="World/Environment" index="1" instance=ExtResource("2_environment")]
+
+[node name="Common20" parent="World/Environment" index="2" instance=ExtResource("3_common")]
+position = Vector2(1980, 690)
+debug_combat = true
+
+[node name="Elite50" parent="World/Environment" index="3" instance=ExtResource("4_elite")]
+position = Vector2(2020, 850)
+debug_combat = true
+
+[node name="Boss80" parent="World/Environment" index="4" instance=ExtResource("5_boss")]
+position = Vector2(2110, 720)
+debug_combat = true
+
+[node name="CoverWest" type="Marker2D" parent="World/Environment"]
+position = Vector2(2210, 980)
+script = ExtResource("6_cover")
+cover_quality = 1.1
+designer_confirmed_cover = false
+
+[node name="CoverEast" type="Marker2D" parent="World/Environment"]
+position = Vector2(2100, 1065)
+script = ExtResource("6_cover")
+cover_quality = 1.2
+designer_confirmed_cover = false
+
+[node name="SandboxHelp" type="CanvasLayer" parent="."]
+layer = 90
+
+[node name="Panel" type="ColorRect" parent="SandboxHelp"]
+offset_left = 18.0
+offset_top = 160.0
+offset_right = 465.0
+offset_bottom = 241.0
+color = Color(0.025, 0.02, 0.018, 0.82)
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="SandboxHelp/Panel"]
+offset_left = 14.0
+offset_top = 10.0
+offset_right = 433.0
+offset_bottom = 71.0
+theme_override_colors/font_color = Color(0.92, 0.86, 0.72, 1)
+theme_override_colors/font_outline_color = Color(0.03, 0.02, 0.01, 1)
+theme_override_constants/outline_size = 4
+text = "SANDBOX IA · Común 20 / Élite 50 / Jefe 80\nCargá un ataque frente al jefe para probar lectura, interrupción y dash."
+
+[editable path="World"]
