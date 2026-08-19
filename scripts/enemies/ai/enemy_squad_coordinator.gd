@@ -108,12 +108,12 @@ func request_attack_commit(
 	var component_key := _component_key(component, subject_data.squad_id)
 	var now := float(Time.get_ticks_msec()) / 1000.0
 	var last_start := float(_last_attack_start_by_component.get(component_key, -9999.0))
-	if active_count > 0 and now - last_start < subject_profile.team_attack_stagger:
+	if active_count > 0 and now - last_start < subject_profile.get_team_attack_stagger():
 		return false
 	_attack_tokens[subject_id] = {
 		"enemy": weakref(subject),
 		"component": component_key,
-		"expires": now + maxf(expected_duration, 0.05) + subject_profile.attack_token_grace
+		"expires": now + maxf(expected_duration, 0.05) + subject_profile.get_attack_token_grace()
 	}
 	_last_attack_start_by_component[component_key] = now
 	return true
@@ -132,7 +132,7 @@ func refresh_attack_commit(
 		return
 	var token: Dictionary = _attack_tokens[subject_id]
 	var now := float(Time.get_ticks_msec()) / 1000.0
-	token["expires"] = now + maxf(expected_duration, 0.05) + subject_profile.attack_token_grace
+	token["expires"] = now + maxf(expected_duration, 0.05) + subject_profile.get_attack_token_grace()
 	_attack_tokens[subject_id] = token
 
 

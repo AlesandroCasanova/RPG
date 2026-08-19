@@ -1,0 +1,23 @@
+IA V5.4.1 — FIX DE PARSER
+===========================
+
+REEMPLAZAR SOLO:
+- res://scripts/enemies/ai/enemy_utility_brain.gd
+- res://scripts/enemies/base/enemy.gd
+
+CONSERVAR TODO LO DEMÁS DE V5.4 / V5.2 / V5.1.
+
+ERRORES CORREGIDOS
+------------------
+1. enemy_utility_brain.gd:
+   group_attacking_count y group_ready_count estaban declaradas dos veces
+   dentro de score_actions().
+
+2. enemy.gd:
+   approach_transition_due ahora está declarado explícitamente como bool.
+   El error era probablemente en cascada por EnemyUtilityBrain, pero el tipo
+   explícito evita una inferencia innecesaria.
+
+Después de reemplazar:
+- Guardar.
+- Si Godot mantiene errores viejos en caché, cerrar y abrir el editor una vez.

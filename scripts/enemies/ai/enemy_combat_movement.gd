@@ -221,7 +221,30 @@ func get_attack_setup(
 		)
 
 	var distance_to_setup := enemy_position.distance_to(_setup_position)
-	var arrived := distance_to_setup <= profile.attack_setup_position_tolerance
+
+	# El punto de setup es una preferencia táctica, no una obligación absoluta.
+	# Si ya estamos dentro de una banda desde la cual el ataque puede alcanzar al
+	# objetivo, aceptamos la posición actual. Esto evita "caminar contra" el
+	# Player intentando alcanzar un punto geométricamente imposible por colisión.
+	var current_target_distance := enemy_position.distance_to(target_position)
+	var minimum_attack_distance := maxf(
+		attack.hitbox_start_offset - maxf(profile.target_radius_estimate, 0.0),
+		0.0
+	)
+	var maximum_attack_distance := (
+		attack.hitbox_start_offset
+		+ attack.hitbox_length
+		+ maxf(profile.target_radius_estimate, 0.0)
+	)
+	var inside_attack_band := (
+		current_target_distance >= minimum_attack_distance
+		and current_target_distance <= maximum_attack_distance
+	)
+
+	var arrived := (
+		distance_to_setup <= profile.get_attack_setup_position_tolerance()
+		or inside_attack_band
+	)
 
 	if arrived:
 		if not _setup_arrived:
@@ -332,7 +355,7 @@ func notify_attack_finished(
 	enemy_position: Vector2,
 	target_position: Vector2
 ) -> void:
-	if profile == null or profile.post_attack_reposition_distance <= 0.0:
+	if profile == null or profile.get_post_attack_reposition_distance() <= 0.0:
 		return
 
 	var away := enemy_position - target_position
@@ -346,9 +369,9 @@ func notify_attack_finished(
 	_reposition_position = (
 		enemy_position
 		+ reposition_direction
-		* profile.post_attack_reposition_distance
+		* profile.get_post_attack_reposition_distance()
 	)
-	_reposition_time_left = profile.post_attack_reposition_duration
+	_reposition_time_left = profile.get_post_attack_reposition_duration()
 	_setup_side *= -1.0
 	movement_phase = PHASE_REPOSITION
 
@@ -385,9 +408,9 @@ func should_dash_for_movement(
 	if purpose not in [&"approach", &"flank", &"attack_setup", &"reposition", &"retreat"]:
 		return false
 
-	var minimum_distance := profile.approach_dash_min_distance
+	var minimum_distance := profile.get_approach_dash_min_distance()
 	if purpose in [&"reposition", &"retreat", &"flank"]:
-		minimum_distance = profile.reposition_dash_min_distance
+		minimum_distance = profile.get_reposition_dash_min_distance()
 
 	if distance_to_goal < minimum_distance:
 		return false
@@ -398,7 +421,7 @@ func should_dash_for_movement(
 
 	if maximum_stamina > 0.0:
 		var stamina_after_dash := current_stamina - dash_cost
-		var required_reserve := maximum_stamina * profile.dash_stamina_reserve_ratio
+		var required_reserve := maximum_stamina * profile.get_dash_stamina_reserve_ratio()
 		if stamina_after_dash < required_reserve:
 			return false
 

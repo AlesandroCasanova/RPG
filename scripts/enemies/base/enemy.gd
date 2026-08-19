@@ -248,6 +248,7 @@ func _ready() -> void:
 
 	_ensure_resources()
 
+	_prepare_runtime_ai_profile()
 	_setup_combat_intelligence()
 
 
@@ -371,6 +372,40 @@ func _ensure_resources() -> void:
 
 
 # =========================================================
+# PERFIL DE IQ POR INSTANCIA
+# =========================================================
+
+func _prepare_runtime_ai_profile() -> void:
+	if ai_profile == null:
+		ai_profile = EnemyAIProfile.new()
+
+	if ai_profile.intelligence_variation_percent <= 0.0:
+		return
+
+	# El .tres puede ser compartido por 10, 20 o 100 enemigos. Solo duplicamos
+	# en runtime cuando hace falta variacion, para no modificar el recurso base.
+	var runtime_profile := ai_profile.duplicate(true) as EnemyAIProfile
+	if runtime_profile == null:
+		return
+
+	var variation_random := RandomNumberGenerator.new()
+	if runtime_profile.deterministic_seed > 0:
+		variation_random.seed = (
+			runtime_profile.deterministic_seed
+			+ int(get_instance_id() % 1000000) * 16127
+		)
+	else:
+		variation_random.randomize()
+
+	runtime_profile.intelligence_percent = (
+		runtime_profile.roll_runtime_intelligence(variation_random)
+	)
+	# La variacion ya fue aplicada; evita que otra capa la vuelva a tirar.
+	runtime_profile.intelligence_variation_percent = 0.0
+	ai_profile = runtime_profile
+
+
+# =========================================================
 # CONFIGURAR INTELIGENCIA DE COMBATE
 # =========================================================
 
@@ -469,11 +504,10 @@ func _setup_ai_debug_label() -> void:
 
 	debug_ai_label.z_as_relative = false
 	debug_ai_label.z_index = 4096
-
 	debug_ai_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	debug_ai_label.visible = debug_combat
-
 	debug_ai_label.text = "DEBUG IA"
+
 
 # =========================================================
 # BARRA DE VIDA
@@ -937,7 +971,11 @@ func _update_tactical_assignment() -> void:
 	if not perception.has_confirmed_visual_contact:
 		var can_search := ai_profile.is_capability_enabled(EnemyAIProfile.CAP_SEARCH)
 		ai_role = &"search" if can_search else &"waiting"
-		ai_target_position = estimated_target if can_search else global_position
+		ai_target_position = (
+			perception.get_search_target_position()
+			if can_search
+			else global_position
+		)
 		ai_can_attack = false
 		ai_group_attacking_count = 0
 		ai_group_ready_count = 1
@@ -1000,9 +1038,24 @@ func _reconsider_ai_action() -> void:
 			or threat_danger >= ai_profile.predicted_danger_threshold
 		)
 	)
+	var approach_transition_due: bool = (
+		ai_action == &"approach"
+		and perception.has_confirmed_visual_contact
+		and (
+			debug_distance_to_player <= ai_profile.get_approach_transition_distance()
+			or (
+				debug_distance_to_player <= ai_profile.get_approach_transition_distance() * 1.50
+				and utility_brain.get_current_action_elapsed()
+				>= ai_profile.get_approach_max_continuous_time()
+			)
+		)
+	)
+
 	var force_reconsideration: bool = (
 		(ai_action == &"attack" and not ai_can_attack)
 		or (ai_action == &"search" and perception.has_confirmed_visual_contact)
+		or (ai_action == &"approach" and not perception.has_confirmed_visual_contact)
+		or approach_transition_due
 		or (recognized_danger and ai_action not in [&"dodge", &"interrupt", &"retreat"])
 	)
 	if not utility_brain.should_reconsider(force_reconsideration):
@@ -1017,7 +1070,7 @@ func _reconsider_ai_action() -> void:
 		perception.has_confirmed_visual_contact
 		and ai_can_attack
 		and not available_attacks.is_empty()
-		and debug_distance_to_player <= ai_profile.attack_setup_max_distance
+		and debug_distance_to_player <= ai_profile.get_attack_setup_max_distance()
 	)
 	var target_facing_me := (
 		target_facing.length_squared() > 0.001
@@ -1053,7 +1106,12 @@ func _reconsider_ai_action() -> void:
 		"dash_ready": _can_ai_dash(),
 		"interrupt_reaches": _can_land_interrupt_attack(),
 		"group_attacking_count": ai_group_attacking_count,
-		"group_ready_count": ai_group_ready_count
+		"group_ready_count": ai_group_ready_count,
+		"nearby_allies": _count_nearby_living_allies(360.0),
+		"suspicious": perception.is_suspicious,
+		"proximity": perception.proximity_detected,
+		"perception_confidence": perception.observation_confidence,
+		"approach_elapsed": utility_brain.get_current_action_elapsed()
 	}
 
 	if combat_memory != null:
@@ -1082,7 +1140,7 @@ func _reconsider_ai_action() -> void:
 			var reservation_duration := (
 				travel_time
 				+ ai_profile.cover_hold_duration
-				+ ai_profile.maximum_commitment
+				+ ai_profile.get_maximum_commitment()
 				+ 0.25
 			)
 			if next_cover.reserve(self, reservation_duration):
@@ -1128,7 +1186,7 @@ func _execute_ai_action(delta: float) -> void:
 			_move_or_hold(_get_retreat_position(), 12.0, &"retreat")
 
 		&"search":
-			_move_or_hold(perception.get_estimated_target_position(false), 12.0)
+			_execute_search_intention()
 
 		&"circle":
 			_execute_circle_intention()
@@ -1144,6 +1202,34 @@ func _execute_ai_action(delta: float) -> void:
 
 		_:
 			_stop_navigation()
+
+func _execute_search_intention() -> void:
+	if perception == null or not perception.is_aware:
+		_stop_navigation()
+		return
+
+	if perception.has_confirmed_visual_contact:
+		utility_brain.interrupt_commitment()
+		return
+
+	var search_position := perception.get_search_target_position()
+	debug_combat_position = search_position
+
+	if search_position == Vector2.ZERO:
+		_stop_navigation()
+		return
+
+	_move_or_hold(
+		search_position,
+		ai_profile.search_arrival_distance
+	)
+
+	# Mientras investiga no mira magicamente al Player oculto: orienta el cuerpo
+	# hacia la zona estimada que esta comprobando.
+	var look_direction := search_position - global_position
+	if look_direction.length_squared() > 0.001:
+		_update_facing(look_direction.normalized())
+
 
 func _execute_circle_intention() -> void:
 	var target_position := perception.get_estimated_target_position(true)
@@ -1227,7 +1313,7 @@ func _get_cover_reentry_delay() -> float:
 	if ai_profile == null:
 		return 0.35
 	return maxf(
-		maxf(0.35, ai_profile.maximum_commitment),
+		maxf(0.35, ai_profile.get_maximum_commitment()),
 		ai_profile.get_effective_decision_interval() * 2.0
 	)
 
@@ -1320,6 +1406,28 @@ func _execute_attack_intention(delta: float) -> void:
 	var observed := perception.get_observed_combat_state()
 	var target_facing := Vector2(observed.get("facing", Vector2.ZERO))
 
+	# Si el Player YA está realmente dentro de la hitbox del ataque, no tiene
+	# sentido perseguir un punto de setup ideal. Esto evita el bloqueo
+	# ATTACK | SETUP estando literalmente al lado del objetivo.
+	_face_player()
+	var immediate_direction := _get_attack_direction(ai_planned_attack)
+	var can_attack_immediately := (
+		attack_cooldown_left <= 0.0
+		and _can_afford_attack(ai_planned_attack)
+		and _attack_hitbox_reaches_player(ai_planned_attack, immediate_direction)
+		and _has_clear_attack_line_to_player()
+	)
+
+	if can_attack_immediately:
+		debug_hitbox_reaches_player = true
+		ai_attack_setup_phase = &"ready"
+		_stop_navigation()
+
+		var immediate_attack := ai_planned_attack
+		if _start_attack(immediate_attack):
+			_clear_ai_attack_plan()
+		return
+
 	if combat_movement != null:
 		var setup: Dictionary = combat_movement.get_attack_setup(
 			global_position,
@@ -1334,7 +1442,7 @@ func _execute_attack_intention(delta: float) -> void:
 		ai_attack_setup_phase = StringName(setup.get("phase", &"setup"))
 		debug_combat_position = setup_position
 		if not setup_ready:
-			_move_or_hold(setup_position, ai_profile.attack_setup_position_tolerance, &"attack_setup")
+			_move_or_hold(setup_position, ai_profile.get_attack_setup_position_tolerance(), &"attack_setup")
 			_face_player()
 			return
 
@@ -1412,6 +1520,24 @@ func _try_ai_movement_dash(
 	return _start_ai_dash(offset.normalized())
 
 
+func _count_nearby_living_allies(radius: float) -> int:
+	var count := 0
+	var radius_squared := maxf(radius, 0.0) * maxf(radius, 0.0)
+
+	for node: Node in EnemySquadCoordinator.get_active_enemies(get_tree()):
+		if node == self or not node is Node2D:
+			continue
+
+		if node.has_method("is_enemy_alive") and not bool(node.call("is_enemy_alive")):
+			continue
+
+		var other := node as Node2D
+		if global_position.distance_squared_to(other.global_position) <= radius_squared:
+			count += 1
+
+	return count
+
+
 func _get_retreat_position() -> Vector2:
 
 	var danger_position: Vector2 = perception.get_estimated_target_position(true)
@@ -1438,103 +1564,49 @@ func _get_retreat_position() -> Vector2:
 
 func _update_ai_debug_label() -> void:
 
-	# Si por algún motivo el Label todavía no existe,
-	# lo creamos automáticamente.
 	if not is_instance_valid(debug_ai_label):
 		_setup_ai_debug_label()
 
 	if not is_instance_valid(debug_ai_label):
 		return
 
-
-	# Permite activar/desactivar Debug Combat incluso
-	# mientras estamos ejecutando el juego.
 	debug_ai_label.visible = debug_combat
-
 
 	if not debug_combat:
 		return
 
-
-	# =====================================================
-	# ESTADO DE PERCEPCIÓN
-	# =====================================================
-
-	var awareness: String = "MEM"
-
-
-	if perception != null and perception.has_confirmed_visual_contact:
-		awareness = "VISION"
-
-	elif perception != null and perception.heard_target:
-		awareness = "OIDO"
-
-	elif perception == null or not perception.is_aware:
-		awareness = "CALMA"
-
-
-	# =====================================================
-	# POSTURA
-	# =====================================================
+	var awareness: String = "CALMA"
+	if perception != null:
+		awareness = perception.get_awareness_label()
 
 	var stance_label: String = String(ai_stance).to_upper()
-
-
 	if combat_tactics != null:
 		stance_label = combat_tactics.get_debug_stance_label()
 
-
-	# =====================================================
-	# PELIGRO PERCIBIDO
-	# =====================================================
-
 	var threat_percent: int = roundi(
 		clampf(
-			float(
-				ai_observed_threat.get(
-					"danger",
-					0.0
-				)
-			),
+			float(ai_observed_threat.get("danger", 0.0)),
 			0.0,
 			1.0
-		)
-		* 100.0
+		) * 100.0
 	)
-
-
-	# =====================================================
-	# DATOS PRINCIPALES
-	# =====================================================
 
 	var confidence_percent: int = 0
 	var observation_percent: int = 0
 	var intelligence_percent: int = 0
 
-
 	if utility_brain != null:
 		confidence_percent = roundi(
-			utility_brain.last_decision_confidence
-			* 100.0
+			utility_brain.last_decision_confidence * 100.0
 		)
-
 
 	if perception != null:
 		observation_percent = roundi(
-			perception.observation_confidence
-			* 100.0
+			perception.observation_confidence * 100.0
 		)
-
 
 	if ai_profile != null:
-		intelligence_percent = roundi(
-			ai_profile.intelligence_percent
-		)
-
-
-	# =====================================================
-	# TEXTO PRINCIPAL
-	# =====================================================
+		intelligence_percent = roundi(ai_profile.intelligence_percent)
 
 	debug_ai_label.text = (
 		String(ai_role).to_upper()
@@ -1544,13 +1616,11 @@ func _update_ai_debug_label() -> void:
 		+ awareness
 	)
 
-
 	if combat_movement != null:
 		debug_ai_label.text += (
 			" | "
 			+ combat_movement.get_debug_label()
 		)
-
 
 	debug_ai_label.text += (
 		"\n"
@@ -1561,88 +1631,54 @@ func _update_ai_debug_label() -> void:
 		+ str(ai_combo_step)
 	)
 
-
 	debug_ai_label.text += (
 		"\nIQ "
 		+ str(intelligence_percent)
-		+ "%"
+		+ "% "
+		+ ai_profile.get_intelligence_label().to_upper()
 		+ " | CONF "
 		+ str(confidence_percent)
-		+ "%"
-		+ " | OBS "
+		+ "% | OBS "
 		+ str(observation_percent)
 		+ "%"
 	)
 
+	if utility_brain != null and ai_action == &"approach":
+		debug_ai_label.text += (
+			" | APR "
+			+ str(snappedf(utility_brain.get_current_action_elapsed(), 0.1))
+			+ "s"
+		)
 
-	if (
-		utility_brain != null
-		and
-		utility_brain.last_was_mistake
-	):
+	if utility_brain != null and utility_brain.last_was_mistake:
 		debug_ai_label.text += " | ERROR"
 
-
-	# =====================================================
-	# SCORES DE DECISIÓN
-	# =====================================================
-
-	if (
-		debug_ai_scores
-		and
-		utility_brain != null
-	):
-
+	if debug_ai_scores and utility_brain != null:
 		var score_parts: PackedStringArray = []
-
-
 		for action_variant: Variant in utility_brain.last_scores:
-
 			score_parts.append(
-				String(action_variant).substr(
-					0,
-					3
-				)
+				String(action_variant).substr(0, 3)
 				+ ":"
 				+ str(
 					snappedf(
-						float(
-							utility_brain.last_scores[
-								action_variant
-							]
-						),
+						float(utility_brain.last_scores[action_variant]),
 						0.01
 					)
 				)
 			)
-
-
 		if not score_parts.is_empty():
-
-			debug_ai_label.text += (
-				"\n"
-				+ " ".join(score_parts)
-			)
-
-
-	# =====================================================
-	# MEMORIA ADAPTATIVA
-	# =====================================================
+			debug_ai_label.text += "\n" + " ".join(score_parts)
 
 	if (
 		combat_memory != null
-		and
-		ai_profile != null
-		and
-		ai_profile.is_capability_enabled(
-			EnemyAIProfile.CAP_ADAPT_ATTACKS
-		)
+		and ai_profile != null
+		and ai_profile.is_capability_enabled(EnemyAIProfile.CAP_ADAPT_ATTACKS)
 	):
-
 		debug_ai_label.text += (
 			"\n"
 			+ combat_memory.get_debug_summary()
 		)
+
 
 func profile_can_read_telegraphs() -> bool:
 	return ai_profile != null and ai_profile.is_capability_enabled(EnemyAIProfile.CAP_READ_TELEGRAPHS)
@@ -2335,7 +2371,7 @@ func _choose_attack(
 				* 2.0
 				* learned_confidence
 				* adaptive_weight
-				* ai_profile.attack_history_influence
+				* ai_profile.get_attack_history_influence()
 			)
 
 
@@ -2454,7 +2490,7 @@ func _start_attack(
 			self,
 			enemy_data,
 			ai_profile,
-			expected_duration + ai_profile.combo_link_delay * float(ai_profile.combo_max_steps)
+			expected_duration + ai_profile.get_combo_link_delay() * float(ai_profile.get_combo_max_steps())
 		):
 			return false
 		ai_attack_commitment_active = true
@@ -2481,7 +2517,7 @@ func _start_attack(
 	var additional_charge_time := 0.0
 	if attack.attack_kind == AttackData.AttackKind.CHARGED:
 		additional_charge_time = maxf(attack.charge_time, 0.0)
-	var combo_link := ai_profile.combo_link_delay if is_combo_followup else 0.0
+	var combo_link := ai_profile.get_combo_link_delay() if is_combo_followup else 0.0
 
 	current_attack_phase = "windup"
 	_play_action_animation("attack")
@@ -2593,10 +2629,38 @@ func _resolve_current_attack_hit() -> void:
 	if player.has_method("is_alive") and not player.is_alive():
 		return
 
+	# Failsafe físico: un melee jamás puede hacer daño si el cuerpo real está
+	# claramente más lejos que el alcance máximo de la propia hitbox.
+	var real_distance_to_player := global_position.distance_to(player.global_position)
+	var absolute_max_hit_distance := (
+		maxf(current_attack.hitbox_start_offset, 0.0)
+		+ maxf(current_attack.hitbox_length, 1.0)
+		+ maxf(ai_profile.target_radius_estimate if ai_profile != null else 18.0, 0.0)
+		+ 8.0
+	)
+
+	if real_distance_to_player > absolute_max_hit_distance:
+		_record_attack_memory_result(current_attack, false)
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name, "] FALLA ", current_attack.attack_name,
+				" | FUERA DE RANGO REAL: ",
+				snappedf(real_distance_to_player, 0.1),
+				" > ",
+				snappedf(absolute_max_hit_distance, 0.1)
+			)
+		return
+
 	if not _attack_hitbox_reaches_player(current_attack, locked_attack_direction):
 		_record_attack_memory_result(current_attack, false)
 		if debug_combat:
-			print(enemy_data.enemy_name, " FALLA ", current_attack.attack_name)
+			print(
+				enemy_data.enemy_name,
+				" [", name, "] FALLA ", current_attack.attack_name,
+				" | HITBOX | DIST: ",
+				snappedf(real_distance_to_player, 0.1)
+			)
 		return
 
 	if not _has_clear_attack_line_to_player():
@@ -2608,7 +2672,13 @@ func _resolve_current_attack_hit() -> void:
 	current_attack_hit = true
 	_record_attack_memory_result(current_attack, true)
 	print("==============================")
-	print(enemy_data.enemy_name, " USA ", current_attack.attack_name)
+	print(
+		enemy_data.enemy_name,
+		" [", name, "] USA ",
+		current_attack.attack_name,
+		" | DISTANCIA REAL: ",
+		snappedf(real_distance_to_player, 0.1)
+	)
 	print("DAÑO: ", current_attack.damage, " | KNOCKBACK: ", current_attack.knockback_force)
 	print("==============================")
 	if player.has_method("take_damage"):
@@ -2673,7 +2743,7 @@ func _choose_enemy_combo_followup(
 		return null
 	if not ai_profile.is_capability_enabled(EnemyAIProfile.CAP_COMBO):
 		return null
-	if ai_combo_step >= maxi(ai_profile.combo_max_steps, 1):
+	if ai_combo_step >= maxi(ai_profile.get_combo_max_steps(), 1):
 		return null
 	if finished_attack.attack_kind == AttackData.AttackKind.CHARGED:
 		return null
@@ -2699,7 +2769,7 @@ func _choose_enemy_combo_followup(
 		return null
 
 	if enemy_data.uses_stamina:
-		var reserve := enemy_data.max_stamina * ai_profile.combo_stamina_reserve_ratio
+		var reserve := enemy_data.max_stamina * ai_profile.get_combo_stamina_reserve_ratio()
 		var affordable: Array[AttackData] = []
 		for candidate: AttackData in candidates:
 			if stamina - candidate.stamina_cost >= reserve:
@@ -2712,7 +2782,7 @@ func _choose_enemy_combo_followup(
 	# El tercer golpe favorece un heavy como remate si existe; el segundo se
 	# mantiene más variable para que no todos los enemigos repitan la misma cadena.
 	if ai_combo_step >= 2 and heavy_attack in candidates:
-		if ai_random.randf() < clampf(ai_profile.combo_primary_to_heavy_bias, 0.0, 1.0):
+		if ai_random.randf() < clampf(ai_profile.get_combo_primary_to_heavy_bias(), 0.0, 1.0):
 			return heavy_attack
 	return _choose_attack(candidates)
 
@@ -3194,7 +3264,10 @@ func _attack_hitbox_reaches_player(
 
 	query.collide_with_bodies = true
 
-	query.collide_with_areas = true
+	# El daño cuerpo a cuerpo debe confirmar el CharacterBody2D real del Player.
+	# No contamos Area2D hijas (ataques, interacción, sensores, etc.), porque una
+	# de esas áreas puede extenderse lejos del cuerpo y producir "golpes fantasma".
+	query.collide_with_areas = false
 
 	query.exclude = [
 		get_rid()
@@ -3213,42 +3286,13 @@ func _attack_hitbox_reaches_player(
 
 	for hit: Dictionary in hits:
 
-		var collider: Variant = (
-			hit.get(
-				"collider"
-			)
-		)
+		var collider: Variant = hit.get("collider")
 
-
+		# Para el golpe real exigimos el cuerpo físico del Player.
+		# intersect_shape() devuelve el CollisionObject2D propietario de la forma,
+		# por lo que no necesitamos aceptar cualquier hijo/ancestro del Player.
 		if collider == player:
-
 			return true
-
-
-		if collider is Node:
-
-			var current_node: Node = (
-				collider as Node
-			)
-
-
-			while current_node != null:
-
-				if current_node == player:
-
-					return true
-
-
-				if current_node.is_in_group(
-					"player"
-				):
-
-					return true
-
-
-				current_node = (
-					current_node.get_parent()
-				)
 
 
 	return false

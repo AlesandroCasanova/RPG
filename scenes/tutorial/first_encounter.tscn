@@ -47,6 +47,7 @@ prediction_horizon_at_hundred = 0.8
 decision_interval = 0.34
 minimum_commitment = 0.6
 maximum_commitment = 0.95
+combat_personality = 1
 aggression = 1.25
 courage = 0.55
 teamwork = 0.25
@@ -74,7 +75,7 @@ attack_setup_hold_at_hundred = 0.05
 attack_setup_angle_at_hundred_degrees = 30.0
 circle_step_distance = 60.0
 circle_tangent_strength = 1.2000000000000002
-circle_radial_correction = 1.4000000000000001
+circle_radial_correction = 1.4
 post_attack_reposition_distance = 70.0
 post_attack_reposition_duration = 0.45
 approach_dash_min_distance = 170.0
@@ -122,18 +123,18 @@ position = Vector2(3180, 760)
 debug_combat = true
 
 [node name="GoblinScout2" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="6" unique_id=1388313946 instance=ExtResource("10_goblin_common")]
-position = Vector2(2998, 965)
+position = Vector2(3260, 694)
 ai_profile = SubResource("Resource_lslw2")
 debug_combat = true
 
 [node name="GoblinForager" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="7" unique_id=313372936 instance=ExtResource("10_goblin_common")]
 visible = false
-position = Vector2(3310, 835)
+position = Vector2(3254, 825)
 debug_combat = true
 
 [node name="GoblinGuard" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="8" unique_id=2131793348 instance=ExtResource("18_goblin_elite")]
 visible = false
-position = Vector2(3420, 720)
+position = Vector2(3377, 801)
 debug_combat = true
 
 [node name="WildBerries" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="9" unique_id=672129411 instance=ExtResource("11_gather")]

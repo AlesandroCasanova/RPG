@@ -1,0 +1,37 @@
+IA V5.2 — HOTFIX ATTACK / SETUP
+================================
+
+REEMPLAZAR SOLO:
+- res://scripts/enemies/base/enemy.gd
+- res://scripts/enemies/ai/enemy_combat_movement.gd
+
+NO reemplazar enemy_ai_profile.gd ni enemy_perception.gd:
+conservá los de V5.1.
+
+PROBLEMA CORREGIDO
+------------------
+El cerebro podía elegir ATTACK correctamente, pero la locomoción quedaba en
+SETUP intentando alcanzar un punto ideal alrededor del Player. Ese punto podía
+ser físicamente imposible de alcanzar por las colisiones de CharacterBody2D.
+
+Resultado:
+ATTACK | VISION | SETUP
+...pero el enemigo no atacaba aunque estuviera pegado.
+
+SOLUCIÓN
+--------
+1. Si el Player ya está realmente dentro de la hitbox del ataque y hay línea
+   limpia, el enemigo salta el setup y ataca inmediatamente.
+2. El punto de setup pasa a ser una preferencia. Si el enemigo ya está dentro de
+   la banda de alcance válida del ataque, su posición actual cuenta como setup.
+3. Si la coordinación grupal no le concede todavía el turno de ataque, mantiene
+   posición en READY en vez de caminar absurdamente alrededor del Player.
+
+PRUEBA
+------
+- IQ 100, capacidades AUTO.
+- Acercate hasta quedar dentro de su rango.
+- El debug puede pasar brevemente por SETUP, pero estando a rango debe llegar a
+  READY/ataque y ejecutar el golpe.
+- Repetir también con IQ bajo: puede decidir peor, pero si decide ATTACK y está
+  a rango, no debe quedar bloqueado por el punto de setup.

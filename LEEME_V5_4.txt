@@ -1,0 +1,69 @@
+IA V5.4 — HUIDA SELECTIVA / SUPERVIVENCIA
+===========================================
+
+REEMPLAZAR:
+- res://scripts/enemies/base/enemy.gd
+- res://scripts/enemies/ai/enemy_ai_profile.gd
+- res://scripts/enemies/ai/enemy_utility_brain.gd
+
+CONSERVAR:
+- enemy_perception.gd de V5.1
+- enemy_combat_movement.gd de V5.2
+- resto de scripts de V5
+
+QUÉ CAMBIA
+----------
+La poca vida ya NO obliga universalmente a todos los enemigos a retirarse.
+
+En AUTO, la voluntad de huir depende principalmente de:
+- personalidad
+- courage
+- vida
+- stamina
+- si tiene aliados cerca
+- si los aliados están atacando/listos
+- IQ para evaluar correctamente la situación
+
+PERSONALIDADES — TENDENCIA AUTOMÁTICA
+-------------------------------------
+Berserker       : nunca huye por poca vida en AUTO
+Agresivo        : muy baja
+Duelista        : baja
+Oportunista     : media
+Equilibrado     : media
+Cazador manada  : media, más sensible a quedar aislado
+Defensivo       : alta
+Cauteloso       : muy alta
+
+IMPORTANTE
+----------
+RETREAT táctico sigue existiendo.
+Un Berserker puede dar un paso atrás por stamina o para salir de una amenaza,
+pero no "entra en pánico por HP bajo" salvo que Flee Mode se fuerce a ENABLED.
+
+OVERRIDE MANUAL
+---------------
+Show Advanced Settings = true
+
+Flee Mode:
+- AUTO      -> personalidad/coraje deciden
+- DISABLED  -> nunca huye por poca vida
+- ENABLED   -> puede huir por poca vida aunque su personalidad normalmente no
+
+El debug muestra:
+HUIDA AUTO / HUIDA NO / HUIDA NUNCA / HUIDA FORZADO
+
+PRUEBAS
+-------
+1) Berserker IQ 80, Flee Mode AUTO:
+   bajarlo a 5-10% HP -> debe seguir combatiendo.
+
+2) Cauteloso IQ 80, AUTO:
+   bajarlo por debajo del umbral -> debería valorar RETREAT mucho más.
+
+3) Mismo cauteloso con Flee Mode DISABLED:
+   HP bajo no debe generar huida, aunque aún puede hacer RETREAT táctico breve.
+
+4) Pack Hunter:
+   comparar HP bajo con 3 aliados cerca vs completamente solo.
+   Solo debería valorar mucho más la retirada.

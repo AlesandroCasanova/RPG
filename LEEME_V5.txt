@@ -1,0 +1,70 @@
+IA V5 — PERFILES DE IQ AUTOMÁTICOS
+==================================
+
+OBJETIVO
+--------
+Para poblar un mapa ya no hace falta ajustar decenas de parámetros por enemigo.
+En uso normal tocás solamente:
+
+- Intelligence Percent
+- Intelligence Variation Percent (opcional)
+- Combat Personality
+- Show Advanced Settings (solo cuando quieras afinar)
+
+RANGOS DE IQ
+------------
+0–19   Instintivo
+20–39  Básico
+40–59  Entrenado
+60–79  Táctico
+80–94  Estratégico
+95–100 Maestro
+
+El rango marca el repertorio general y el porcentaje exacto interpola reacción,
+error, memoria, búsqueda, frecuencia de decisión, APPROACH, utilidades tácticas,
+coordinación, combos y uso de herramientas. No hay saltos bruscos entre 59 y 60.
+
+CAPACIDADES EN AUTO
+-------------------
+Las capacidades siguen usando AUTO / DISABLED / ENABLED.
+- AUTO: el IQ decide si está habilitada.
+- DISABLED: nunca se usa.
+- ENABLED: se fuerza incluso si el IQ normalmente no alcanzaría.
+
+MODO NORMAL DEL INSPECTOR
+------------------------
+Con Show Advanced Settings desactivado, el perfil oculta el ajuste fino. Esto
+no borra nada: solo evita el caos visual. Al activarlo aparecen nuevamente las
+curvas, capacidades, percepción, búsqueda, movimiento, pesos y demás tuning.
+
+VARIACIÓN POR INSTANCIA
+----------------------
+Ejemplo: common_30.tres con IQ 30 y variación ±5.
+Podés asignar ese MISMO .tres a 15 goblins y cada instancia obtiene en runtime
+un IQ entre 25 y 35. El recurso compartido no se modifica.
+
+ARCHIVOS A REEMPLAZAR
+---------------------
+- res://scripts/enemies/base/enemy.gd
+- res://scripts/enemies/ai/enemy_ai_profile.gd
+- res://scripts/enemies/ai/enemy_utility_brain.gd
+- res://scripts/enemies/ai/enemy_combat_tactics.gd
+- res://scripts/enemies/ai/enemy_squad_coordinator.gd
+- res://scripts/enemies/ai/enemy_combat_movement.gd
+
+NO hay nodos nuevos que agregar a escenas.
+
+PRUEBA RÁPIDA
+-------------
+1. Asigná un mismo perfil a varios goblins.
+2. IQ 30, Variación 5, capacidades en AUTO.
+3. Activá Debug Combat.
+4. En runtime deberías ver IQ distintos aproximadamente 25–35.
+5. Probá luego IQ 10 vs 100: el debug ahora también muestra el rango textual.
+6. Activá Show Advanced Settings para confirmar que el tuning sigue disponible.
+
+NOTA
+----
+Se hicieron comprobaciones estáticas de funciones duplicadas y delimitadores.
+Este entorno no tiene Godot instalado, así que el parser definitivo lo valida
+tu Godot al importar los scripts.

@@ -1,28 +1,10 @@
-[gd_resource type="Resource" script_class="DialogueData" load_steps=12 format=3]
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://b6r353s7302xj"]
 
-[ext_resource type="Script" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
-[ext_resource type="Script" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
-[ext_resource type="Script" path="res://scripts/dialogue/dialogue_choice_data.gd" id="3_choice"]
-[ext_resource type="Texture2D" path="res://assets/characters/npcs/maela/maela_poor.png" id="4_maela"]
-[ext_resource type="Texture2D" path="res://assets/characters/npcs/ivar/ivar_poor.png" id="5_ivar"]
-
-[sub_resource type="Resource" id="Entry1"]
-script = ExtResource("2_entry")
-speaker = "Maela"
-text = "El consejo escuchó tu informe. Solo tenemos manos y materiales para una respuesta inmediata."
-portrait = ExtResource("4_maela")
-
-[sub_resource type="Resource" id="Entry2"]
-script = ExtResource("2_entry")
-speaker = "Ivar"
-text = "Podemos reforzar el refugio y proteger a los nuestros, pero perderemos la oportunidad de seguir el rastro."
-portrait = ExtResource("5_ivar")
-
-[sub_resource type="Resource" id="Entry3"]
-script = ExtResource("2_entry")
-speaker = "Nara"
-text = "O podemos reconocer la corrupción ahora. Será peligroso, pero sabremos qué se acerca antes de que llegue."
-portrait = ExtResource("4_maela")
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="3_choice"]
+[ext_resource type="Texture2D" uid="uid://b6lfpd4gikjdf" path="res://assets/characters/npcs/maela/maela_poor.png" id="4_maela"]
+[ext_resource type="Texture2D" uid="uid://3llq5gbbc2un" path="res://assets/characters/npcs/ivar/ivar_poor.png" id="5_ivar"]
 
 [sub_resource type="Resource" id="FortifyResponse1"]
 script = ExtResource("2_entry")
@@ -60,9 +42,26 @@ choice_id = &"track_corruption"
 label = "Seguir la corrupción antes de que avance"
 response_entries = Array[ExtResource("2_entry")]([SubResource("TrackResponse1"), SubResource("TrackResponse2")])
 
+[sub_resource type="Resource" id="Entry1"]
+script = ExtResource("2_entry")
+speaker = "Maela"
+text = "El consejo escuchó tu informe. Solo tenemos manos y materiales para una respuesta inmediata."
+portrait = ExtResource("4_maela")
+
+[sub_resource type="Resource" id="Entry2"]
+script = ExtResource("2_entry")
+speaker = "Ivar"
+text = "Podemos reforzar el refugio y proteger a los nuestros, pero perderemos la oportunidad de seguir el rastro."
+portrait = ExtResource("5_ivar")
+
+[sub_resource type="Resource" id="Entry3"]
+script = ExtResource("2_entry")
+speaker = "Nara"
+text = "O podemos reconocer la corrupción ahora. Será peligroso, pero sabremos qué se acerca antes de que llegue."
+portrait = ExtResource("4_maela")
+
 [resource]
 script = ExtResource("1_data")
 dialogue_id = &"council_decision"
 entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])
 choices = Array[ExtResource("3_choice")]([SubResource("ChoiceFortify"), SubResource("ChoiceTrack")])
-

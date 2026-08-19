@@ -1,3 +1,4 @@
+@tool
 class_name EnemyAIProfile
 extends Resource
 
@@ -41,6 +42,19 @@ const CAP_COMBO: StringName = &"combo"
 
 @export_range(0.0, 100.0, 1.0)
 var intelligence_percent: float = 20.0
+
+## Variacion opcional por instancia. Un recurso common_30.tres con ±5 puede
+## producir enemigos entre IQ 25 y 35 sin crear quince perfiles distintos.
+@export_range(0.0, 25.0, 1.0)
+var intelligence_variation_percent: float = 0.0
+
+## Oculta el ajuste fino y deja visible solo IQ + personalidad durante el
+## trabajo normal. Activarlo no desactiva la automatizacion: expone las curvas,
+## umbrales y pesos que usa el generador automatico para poder afinarlos.
+@export var show_advanced_settings: bool = false:
+	set(value):
+		show_advanced_settings = value
+		notify_property_list_changed()
 
 @export_range(0.0, 2.0, 0.05)
 var decision_error_multiplier: float = 1.0
@@ -123,6 +137,67 @@ var memory_duration: float = 4.0
 
 @export_flags_2d_physics
 var sight_collision_mask: int = 1
+
+
+@export_category("Sospecha y busqueda")
+
+## Tiempo de sospecha si una IA muy basica pierde de vista al objetivo.
+@export_range(0.0, 30.0, 0.1)
+var suspicion_duration_at_zero: float = 1.4
+
+## Tiempo de sospecha si una IA maestra pierde de vista al objetivo.
+@export_range(0.0, 30.0, 0.1)
+var suspicion_duration_at_hundred: float = 8.0
+
+## Rango de presencia corporal aproximada para una IA basica.
+## No otorga vision a traves de paredes: solo una pista espacial imprecisa.
+@export_range(0.0, 500.0, 1.0)
+var proximity_range_at_zero: float = 55.0
+
+## Rango de presencia corporal aproximada para una IA maestra.
+@export_range(0.0, 500.0, 1.0)
+var proximity_range_at_hundred: float = 110.0
+
+@export_range(0.0, 1.0, 0.01)
+var proximity_confidence_at_zero: float = 0.18
+
+@export_range(0.0, 1.0, 0.01)
+var proximity_confidence_at_hundred: float = 0.68
+
+## Error minimo de una pista por proximidad. Incluso una IA excelente no
+## obtiene la posicion exacta del Player cuando no puede verlo.
+@export_range(0.0, 256.0, 1.0)
+var proximity_position_error_at_zero: float = 68.0
+
+@export_range(0.0, 256.0, 1.0)
+var proximity_position_error_at_hundred: float = 20.0
+
+## Distancia al ultimo punto conocido a partir de la cual empieza a revisar
+## laterales/salidas en vez de caminar directamente a ese punto.
+@export_range(4.0, 200.0, 1.0)
+var search_arrival_distance: float = 24.0
+
+@export_range(10.0, 300.0, 1.0)
+var search_probe_radius_at_zero: float = 42.0
+
+@export_range(10.0, 300.0, 1.0)
+var search_probe_radius_at_hundred: float = 88.0
+
+@export_range(0.05, 3.0, 0.05)
+var search_retarget_interval_at_zero: float = 1.10
+
+@export_range(0.05, 3.0, 0.05)
+var search_retarget_interval_at_hundred: float = 0.34
+
+@export_range(1, 8, 1)
+var search_probe_count_at_zero: int = 1
+
+@export_range(1, 8, 1)
+var search_probe_count_at_hundred: int = 4
+
+## Cuanto extrapola la ultima velocidad observada al iniciar una busqueda.
+@export_range(0.0, 2.0, 0.01)
+var search_prediction_time_at_hundred: float = 0.55
 
 
 @export_category("Ritmo de decision")
@@ -231,6 +306,23 @@ var tactical_anchor_retarget_distance: float = 58.0
 ## la hitbox todavia no alcance.
 @export_range(20.0, 600.0, 1.0)
 var attack_setup_max_distance: float = 175.0
+
+## Distancia, relativa a Preferred Distance, a partir de la cual APPROACH
+## deja de ser una accion dominante y debe ceder a setup/hold/circle/flank.
+@export_range(1.0, 5.0, 0.05)
+var approach_transition_distance_multiplier: float = 2.25
+
+## Tiempo continuo maximo razonable en APPROACH para una IA basica.
+@export_range(0.1, 6.0, 0.05)
+var approach_max_time_at_zero: float = 2.30
+
+## Una IA maestra reevalua antes y evita perseguir sin construir una entrada.
+@export_range(0.1, 6.0, 0.05)
+var approach_max_time_at_hundred: float = 0.85
+
+## Cuanto cae la utilidad de APPROACH cuando ya excedio su tiempo tactico.
+@export_range(0.0, 1.0, 0.05)
+var approach_fatigue_strength: float = 0.88
 
 ## En que parte util del alcance intenta colocarse antes de atacar.
 ## 0 = muy cerca del inicio de la hitbox, 1 = cerca del borde exterior.
@@ -565,15 +657,45 @@ func get_intelligence_ratio() -> float:
 
 
 func get_intelligence_label() -> String:
-	if intelligence_percent < 26.0:
-		return "Instintiva"
-	if intelligence_percent < 51.0:
-		return "Táctica básica"
-	if intelligence_percent < 76.0:
-		return "Táctica avanzada"
-	if intelligence_percent < 91.0:
-		return "Estratégica"
-	return "Maestra"
+	if intelligence_percent < 20.0:
+		return "Instintivo"
+	if intelligence_percent < 40.0:
+		return "Básico"
+	if intelligence_percent < 60.0:
+		return "Entrenado"
+	if intelligence_percent < 80.0:
+		return "Táctico"
+	if intelligence_percent < 95.0:
+		return "Estratégico"
+	return "Maestro"
+
+
+func get_intelligence_tier_index() -> int:
+	if intelligence_percent < 20.0:
+		return 0
+	if intelligence_percent < 40.0:
+		return 1
+	if intelligence_percent < 60.0:
+		return 2
+	if intelligence_percent < 80.0:
+		return 3
+	if intelligence_percent < 95.0:
+		return 4
+	return 5
+
+
+func roll_runtime_intelligence(random: RandomNumberGenerator) -> float:
+	if random == null or intelligence_variation_percent <= 0.0:
+		return clampf(intelligence_percent, 0.0, 100.0)
+	return clampf(
+		intelligence_percent
+		+ random.randf_range(
+			-intelligence_variation_percent,
+			intelligence_variation_percent
+		),
+		0.0,
+		100.0
+	)
 
 
 func is_capability_enabled(capability: StringName) -> bool:
@@ -623,6 +745,357 @@ func get_memory_position_error() -> float:
 	)
 
 
+func get_perceptual_memory_duration() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	# Conserva memory_duration como valor base compatible con perfiles .tres
+	# existentes, pero vuelve su uso claramente dependiente del IQ.
+	return maxf(
+		memory_duration * lerpf(0.65, 2.50, skill),
+		0.25
+	)
+
+
+func get_suspicion_duration() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	return maxf(
+		lerpf(suspicion_duration_at_zero, suspicion_duration_at_hundred, skill),
+		0.0
+	)
+
+
+func get_proximity_sense_range() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.88)
+	return maxf(
+		lerpf(proximity_range_at_zero, proximity_range_at_hundred, skill),
+		0.0
+	)
+
+
+func get_proximity_confidence() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.86)
+	return clampf(
+		lerpf(proximity_confidence_at_zero, proximity_confidence_at_hundred, skill),
+		0.0,
+		1.0
+	)
+
+
+func get_proximity_position_error() -> float:
+	var skill := get_intelligence_ratio()
+	return maxf(
+		lerpf(proximity_position_error_at_zero, proximity_position_error_at_hundred, skill)
+		* memory_error_multiplier,
+		0.0
+	)
+
+
+func get_search_probe_radius() -> float:
+	return maxf(
+		lerpf(
+			search_probe_radius_at_zero,
+			search_probe_radius_at_hundred,
+			get_intelligence_ratio()
+		),
+		10.0
+	)
+
+
+func get_search_retarget_interval() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.85)
+	return maxf(
+		lerpf(
+			search_retarget_interval_at_zero,
+			search_retarget_interval_at_hundred,
+			skill
+		),
+		0.05
+	)
+
+
+func get_search_probe_count() -> int:
+	return maxi(
+		roundi(
+			lerpf(
+				float(search_probe_count_at_zero),
+				float(search_probe_count_at_hundred),
+				get_intelligence_ratio()
+			)
+		),
+		1
+	)
+
+
+func get_search_prediction_time() -> float:
+	if not is_capability_enabled(CAP_SEARCH):
+		return 0.0
+	var skill := get_intelligence_ratio()
+	return maxf(search_prediction_time_at_hundred * skill, 0.0)
+
+
+func get_approach_transition_distance() -> float:
+	# Un enemigo poco inteligente invade mas la distancia antes de dejar de
+	# perseguir. Uno experto empieza a construir postura desde mas lejos.
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	var iq_multiplier := lerpf(0.78, 1.12, skill)
+	return maxf(
+		preferred_distance * approach_transition_distance_multiplier * iq_multiplier,
+		preferred_distance + 8.0
+	)
+
+
+func get_approach_max_continuous_time() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.78)
+	return maxf(
+		lerpf(approach_max_time_at_zero, approach_max_time_at_hundred, skill),
+		0.10
+	)
+
+
+func get_approach_fatigue_strength() -> float:
+	# IQ alto abandona antes una aproximacion que ya no construye ventaja.
+	return clampf(
+		approach_fatigue_strength * lerpf(0.52, 1.0, get_intelligence_ratio()),
+		0.0,
+		1.0
+	)
+
+
+func get_minimum_commitment() -> float:
+	return maxf(
+		minimum_commitment * lerpf(1.12, 0.88, get_intelligence_ratio()),
+		0.05
+	)
+
+
+func get_maximum_commitment() -> float:
+	return maxf(
+		maximum_commitment * lerpf(1.12, 0.88, get_intelligence_ratio()),
+		get_minimum_commitment()
+	)
+
+
+func get_effective_teamwork() -> float:
+	if not is_capability_enabled(CAP_TEAMWORK):
+		return teamwork * 0.25
+	return teamwork * lerpf(0.62, 1.12, get_intelligence_ratio())
+
+
+func get_low_health_flee_willingness() -> float:
+	# El IQ no define si el enemigo es cobarde. Eso lo hacen su personalidad
+	# y su coraje. El IQ determina qué tan bien interpreta la situación.
+	var base: float = 0.50
+
+	match combat_personality:
+		CombatPersonality.BALANCED:
+			base = 0.52
+		CombatPersonality.AGGRESSIVE:
+			base = 0.18
+		CombatPersonality.CAUTIOUS:
+			base = 0.88
+		CombatPersonality.OPPORTUNIST:
+			base = 0.48
+		CombatPersonality.DUELIST:
+			base = 0.24
+		CombatPersonality.BERSERKER:
+			base = 0.0
+		CombatPersonality.PACK_HUNTER:
+			base = 0.46
+		CombatPersonality.DEFENSIVE:
+			base = 0.82
+
+	# courage=0 favorece huida; courage=2 la reduce mucho.
+	var courage_factor := lerpf(
+		1.35,
+		0.18,
+		clampf(courage / 2.0, 0.0, 1.0)
+	)
+
+	return clampf(base * courage_factor, 0.0, 1.0)
+
+
+func can_flee_from_low_health() -> bool:
+	match flee_mode:
+		CapabilityMode.DISABLED:
+			return false
+
+		CapabilityMode.ENABLED:
+			return true
+
+		_:
+			# AUTO: personalidad + coraje.
+			return get_low_health_flee_willingness() >= 0.12
+
+
+func get_effective_flee_health_ratio() -> float:
+	if not can_flee_from_low_health():
+		return 0.0
+
+	var willingness := get_low_health_flee_willingness()
+
+	# El umbral avanzado retreat_health_ratio sigue siendo editable, pero en
+	# AUTO se adapta a la personalidad: cautelosos empiezan a considerar huida
+	# antes; agresivos aguantan mucho más.
+	var personality_scale := lerpf(0.48, 1.22, willingness)
+
+	return clampf(
+		retreat_health_ratio * personality_scale,
+		0.03,
+		0.75
+	)
+
+
+func get_low_health_flee_quality() -> float:
+	# Calidad de la retirada, no voluntad de huir.
+	# IQ alto sabe evaluar mejor stamina, aliados, peligro y rutas.
+	return clampf(pow(get_intelligence_ratio(), 0.80), 0.0, 1.0)
+
+
+func get_low_health_flee_label() -> String:
+	if flee_mode == CapabilityMode.DISABLED:
+		return "NUNCA"
+	if flee_mode == CapabilityMode.ENABLED:
+		return "FORZADO"
+	if not can_flee_from_low_health():
+		return "NO"
+	return "AUTO"
+
+
+func get_action_utility(action: StringName) -> float:
+	# Los pesos base siguen siendo editables en avanzado, pero el IQ cambia
+	# cuanto sabe aprovechar cada herramienta. En particular APPROACH pierde
+	# peso al crecer el IQ mientras las opciones tacticas ganan protagonismo.
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	match action:
+		&"attack":
+			return attack_utility * lerpf(0.88, 1.08, skill)
+		&"approach":
+			return approach_utility * lerpf(1.18, 0.78, skill)
+		&"flank":
+			return flank_utility * lerpf(0.58, 1.14, skill)
+		&"hold":
+			return hold_utility * lerpf(0.72, 1.08, skill)
+		&"retreat":
+			return retreat_utility * lerpf(0.88, 1.06, skill)
+		&"search":
+			return search_utility * lerpf(0.72, 1.18, skill)
+		&"circle":
+			return circle_utility * lerpf(0.52, 1.16, skill)
+		&"cover":
+			return cover_utility * lerpf(0.58, 1.15, skill)
+		&"dodge":
+			return dodge_utility * lerpf(0.55, 1.12, skill)
+		&"interrupt":
+			return interrupt_utility * lerpf(0.52, 1.14, skill)
+	return 1.0
+
+
+func get_attack_history_influence() -> float:
+	if not is_capability_enabled(CAP_ADAPT_ATTACKS):
+		return 0.0
+	return maxf(
+		attack_history_influence * lerpf(0.35, 1.0, get_intelligence_ratio()),
+		0.0
+	)
+
+
+func get_attack_setup_max_distance() -> float:
+	return maxf(
+		attack_setup_max_distance * lerpf(0.78, 1.08, get_intelligence_ratio()),
+		preferred_distance
+	)
+
+
+func get_attack_setup_position_tolerance() -> float:
+	# Un IQ bajo acepta colocaciones mas imprecisas.
+	return maxf(
+		attack_setup_position_tolerance * lerpf(1.55, 0.78, get_intelligence_ratio()),
+		2.0
+	)
+
+
+func get_post_attack_reposition_distance() -> float:
+	return maxf(
+		post_attack_reposition_distance * lerpf(0.42, 1.08, get_intelligence_ratio()),
+		0.0
+	)
+
+
+func get_post_attack_reposition_duration() -> float:
+	return maxf(
+		post_attack_reposition_duration * lerpf(0.70, 1.05, get_intelligence_ratio()),
+		0.0
+	)
+
+
+func get_approach_dash_min_distance() -> float:
+	return maxf(
+		approach_dash_min_distance * lerpf(1.18, 0.86, get_intelligence_ratio()),
+		20.0
+	)
+
+
+func get_reposition_dash_min_distance() -> float:
+	return maxf(
+		reposition_dash_min_distance * lerpf(1.15, 0.86, get_intelligence_ratio()),
+		20.0
+	)
+
+
+func get_dash_stamina_reserve_ratio() -> float:
+	return clampf(
+		dash_stamina_reserve_ratio * lerpf(0.35, 1.10, get_intelligence_ratio()),
+		0.0,
+		1.0
+	)
+
+
+func get_team_attack_stagger() -> float:
+	if not is_capability_enabled(CAP_TEAMWORK):
+		return 0.0
+	return maxf(
+		team_attack_stagger * lerpf(0.60, 1.20, get_intelligence_ratio()),
+		0.0
+	)
+
+
+func get_attack_token_grace() -> float:
+	return maxf(attack_token_grace, 0.10)
+
+
+func get_combo_max_steps() -> int:
+	if not is_capability_enabled(CAP_COMBO):
+		return 1
+	var mastery := clampf((intelligence_percent - 60.0) / 40.0, 0.0, 1.0)
+	return clampi(
+		2 + roundi(float(maxi(combo_max_steps - 2, 0)) * mastery),
+		1,
+		maxi(combo_max_steps, 1)
+	)
+
+
+func get_combo_link_delay() -> float:
+	return maxf(
+		combo_link_delay * lerpf(1.30, 0.82, get_intelligence_ratio()),
+		0.0
+	)
+
+
+func get_combo_stamina_reserve_ratio() -> float:
+	return clampf(
+		combo_stamina_reserve_ratio * lerpf(0.35, 1.08, get_intelligence_ratio()),
+		0.0,
+		1.0
+	)
+
+
+func get_combo_primary_to_heavy_bias() -> float:
+	return clampf(
+		combo_primary_to_heavy_bias * lerpf(0.58, 1.05, get_intelligence_ratio()),
+		0.0,
+		1.0
+	)
+
+
 func get_combat_memory_half_life() -> float:
 	var skill := get_intelligence_ratio()
 	return maxf(
@@ -666,8 +1139,9 @@ func get_prediction_horizon() -> float:
 
 
 func get_effective_decision_interval() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
 	return maxf(
-		decision_interval * lerpf(1.85, 0.72, get_intelligence_ratio()),
+		decision_interval * lerpf(2.05, 0.62, skill),
 		0.04
 	)
 
@@ -677,18 +1151,18 @@ func _get_capability_threshold(capability: StringName) -> float:
 		CAP_FLEE: return 0.0
 		CAP_SEARCH: return 10.0
 		CAP_HEAVY_ATTACK: return 30.0
-		CAP_TEAMWORK: return 35.0
-		CAP_FLANK: return 35.0
-		CAP_CIRCLE: return 40.0
-		CAP_COVER: return 45.0
-		CAP_ADAPT_ATTACKS: return 50.0
-		CAP_READ_TELEGRAPHS: return 60.0
-		CAP_DODGE: return 65.0
-		CAP_DASH: return 50.0
-		CAP_INTERRUPT: return 70.0
+		CAP_TEAMWORK: return 40.0
+		CAP_FLANK: return 45.0
+		CAP_CIRCLE: return 50.0
+		CAP_COVER: return 55.0
+		CAP_ADAPT_ATTACKS: return 60.0
+		CAP_READ_TELEGRAPHS: return 65.0
+		CAP_DODGE: return 70.0
+		CAP_DASH: return 55.0
+		CAP_INTERRUPT: return 75.0
 		CAP_CHARGED_ATTACK: return 75.0
 		CAP_PREDICT: return 80.0
-		CAP_COMBO: return 60.0
+		CAP_COMBO: return 65.0
 	return 101.0
 
 
@@ -710,3 +1184,165 @@ func _get_capability_mode(capability: StringName) -> CapabilityMode:
 		CAP_PREDICT: return predict_mode
 		CAP_COMBO: return combo_mode
 	return CapabilityMode.DISABLED
+
+
+const _ADVANCED_INSPECTOR_PROPERTIES: Array[StringName] = [
+	&"adaptive_evidence_at_hundred",
+	&"adaptive_evidence_at_zero",
+	&"adaptive_influence",
+	&"adaptive_learning_strength",
+	&"adaptive_memory_half_life",
+	&"aggression",
+	&"approach_dash_min_distance",
+	&"approach_fatigue_strength",
+	&"approach_max_time_at_hundred",
+	&"approach_max_time_at_zero",
+	&"approach_transition_distance_multiplier",
+	&"approach_utility",
+	&"attack_history_influence",
+	&"attack_setup_angle_at_hundred_degrees",
+	&"attack_setup_angle_at_zero_degrees",
+	&"attack_setup_hold_at_hundred",
+	&"attack_setup_hold_at_zero",
+	&"attack_setup_max_distance",
+	&"attack_setup_position_tolerance",
+	&"attack_setup_reach_ratio",
+	&"attack_setup_retarget_distance",
+	&"attack_token_grace",
+	&"attack_utility",
+	&"charged_threat_length_multiplier",
+	&"circle_radial_correction",
+	&"circle_radius",
+	&"circle_step_distance",
+	&"circle_tangent_strength",
+	&"circle_utility",
+	&"combo_chance_at_hundred",
+	&"combo_chance_at_zero",
+	&"combo_link_delay",
+	&"combo_max_steps",
+	&"combo_primary_to_heavy_bias",
+	&"combo_stamina_reserve_ratio",
+	&"courage",
+	&"cover_hold_duration",
+	&"cover_search_radius",
+	&"cover_utility",
+	&"danger_padding",
+	&"dash_stamina_reserve_ratio",
+	&"dash_stop_buffer",
+	&"decision_error_multiplier",
+	&"decision_interval",
+	&"decision_noise_at_hundred",
+	&"decision_noise_at_zero",
+	&"deterministic_seed",
+	&"dodge_utility",
+	&"flank_radius",
+	&"flank_utility",
+	&"hearing_range",
+	&"hearing_velocity_threshold",
+	&"heavy_threat_length_multiplier",
+	&"hold_utility",
+	&"interrupt_utility",
+	&"maximum_commitment",
+	&"maximum_predictive_lead",
+	&"memory_duration",
+	&"memory_error_multiplier",
+	&"memory_position_error_at_hundred",
+	&"memory_position_error_at_zero",
+	&"minimum_commitment",
+	&"mistake_chance_at_hundred",
+	&"mistake_chance_at_zero",
+	&"patience",
+	&"player_threat_length_estimate",
+	&"player_threat_start_offset_estimate",
+	&"player_threat_width_estimate",
+	&"post_attack_reposition_distance",
+	&"post_attack_reposition_duration",
+	&"predicted_danger_threshold",
+	&"prediction_horizon_at_hundred",
+	&"predictive_attack_extra_horizon",
+	&"predictive_dodge_safety_padding",
+	&"predictive_dodge_step_distance",
+	&"preferred_distance",
+	&"proximity_confidence_at_hundred",
+	&"proximity_confidence_at_zero",
+	&"proximity_position_error_at_hundred",
+	&"proximity_position_error_at_zero",
+	&"proximity_range_at_hundred",
+	&"proximity_range_at_zero",
+	&"reaction_time_at_hundred",
+	&"reaction_time_at_zero",
+	&"reaction_time_multiplier",
+	&"reposition_dash_min_distance",
+	&"retreat_distance",
+	&"retreat_health_ratio",
+	&"retreat_utility",
+	&"search_arrival_distance",
+	&"search_prediction_time_at_hundred",
+	&"search_probe_count_at_hundred",
+	&"search_probe_count_at_zero",
+	&"search_probe_radius_at_hundred",
+	&"search_probe_radius_at_zero",
+	&"search_retarget_interval_at_hundred",
+	&"search_retarget_interval_at_zero",
+	&"search_utility",
+	&"sight_collision_mask",
+	&"stance_lock_at_hundred",
+	&"stance_lock_at_zero",
+	&"support_radius",
+	&"suspicion_duration_at_hundred",
+	&"suspicion_duration_at_zero",
+	&"tactical_anchor_lock_time",
+	&"tactical_anchor_retarget_distance",
+	&"target_radius_estimate",
+	&"team_attack_stagger",
+	&"teamwork",
+	&"vision_angle_degrees",
+	&"vision_range"
+]
+
+
+const _ADVANCED_INSPECTOR_CATEGORIES: Array[StringName] = [
+	&"Capacidades",
+	&"Reaccion e incertidumbre",
+	&"Percepcion",
+	&"Sospecha y busqueda",
+	&"Ritmo de decision",
+	&"Memoria adaptativa",
+	&"Posicionamiento tactico",
+	&"Esquiva y desplazamiento",
+	&"Movimiento tactico",
+	&"Lectura espacial y prediccion",
+	&"Posturas de combate",
+	&"Coordinacion avanzada",
+	&"Combos de IA",
+	&"Pesos de utilidad"
+]
+
+
+func _validate_property(property: Dictionary) -> void:
+	if show_advanced_settings:
+		return
+	var property_name := StringName(property.get("name", ""))
+	if (
+		property_name in _ADVANCED_INSPECTOR_PROPERTIES
+		or property_name in _ADVANCED_INSPECTOR_CATEGORIES
+	):
+		property["usage"] = int(property.get("usage", 0)) & ~PROPERTY_USAGE_EDITOR
+
+
+func get_auto_profile_summary() -> String:
+	var enabled: PackedStringArray = []
+	for capability: StringName in [
+		CAP_SEARCH, CAP_HEAVY_ATTACK, CAP_TEAMWORK, CAP_FLANK, CAP_CIRCLE,
+		CAP_COVER, CAP_ADAPT_ATTACKS, CAP_READ_TELEGRAPHS, CAP_DODGE,
+		CAP_DASH, CAP_INTERRUPT, CAP_CHARGED_ATTACK, CAP_PREDICT, CAP_COMBO
+	]:
+		if is_capability_enabled(capability):
+			enabled.append(String(capability))
+	return (
+		get_intelligence_label()
+		+ " | IQ " + str(roundi(intelligence_percent)) + "%"
+		+ " | Reacción " + str(snappedf(get_reaction_time(), 0.01)) + "s"
+		+ " | Huida HP: " + get_low_health_flee_label()
+		+ " | Capacidades: " + ", ".join(enabled)
+	)

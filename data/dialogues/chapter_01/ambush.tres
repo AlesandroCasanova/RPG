@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="DialogueData" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="DialogueData" format=3 uid="uid://closny2jrtpwp"]
 
-[ext_resource type="Script" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
-[ext_resource type="Script" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
+[ext_resource type="Script" uid="uid://cg3b2j5ksssfo" path="res://scripts/dialogue/dialogue_data.gd" id="1_data"]
+[ext_resource type="Script" uid="uid://v4j5d331l6nn" path="res://scripts/dialogue/dialogue_choice_data.gd" id="1_lv12k"]
+[ext_resource type="Script" uid="uid://cyihtyybqw70d" path="res://scripts/dialogue/dialogue_entry_data.gd" id="2_entry"]
 
 [sub_resource type="Resource" id="Entry1"]
 script = ExtResource("2_entry")
@@ -23,4 +24,3 @@ text = "Je. El cachorro cree que puede elegir. ¡Mátenlo!"
 script = ExtResource("1_data")
 dialogue_id = &"ambush"
 entries = Array[ExtResource("2_entry")]([SubResource("Entry1"), SubResource("Entry2"), SubResource("Entry3")])
-

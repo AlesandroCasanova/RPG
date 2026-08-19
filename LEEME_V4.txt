@@ -1,0 +1,47 @@
+IA V4 — PERCEPCIÓN, SOSPECHA Y APPROACH
+==========================================
+
+REEMPLAZAR ESTOS 4 ARCHIVOS:
+- res://scripts/enemies/base/enemy.gd
+- res://scripts/enemies/ai/enemy_perception.gd
+- res://scripts/enemies/ai/enemy_ai_profile.gd
+- res://scripts/enemies/ai/enemy_utility_brain.gd
+
+NO HAY NODOS NUEVOS QUE AGREGAR A ESCENAS.
+
+CAMBIOS PRINCIPALES
+-------------------
+1. Memoria perceptiva escalada por IQ.
+2. Estado de sospecha al perder línea de visión.
+3. Percepción de proximidad aproximada (no visión a través de paredes).
+4. Búsqueda alrededor de la última posición conocida.
+5. Predicción corta de la trayectoria observada al iniciar una búsqueda.
+6. IQ alto revisa más puntos y retargetea mejor durante SEARCH.
+7. APPROACH ahora es una transición y deja de competir cuando no hay visión.
+8. Penalización por permanecer demasiado tiempo en APPROACH.
+9. Dentro de la distancia táctica aumenta el peso relativo de HOLD/CIRCLE/FLANK/ATTACK.
+10. Debug visual muestra VISION / OIDO / PROX / SOSPECHA / MEM / CALMA.
+11. Cuando está en APPROACH muestra APR X.Xs para ver cuánto lleva aproximándose.
+
+PRUEBA RECOMENDADA
+------------------
+- Usar perfiles únicos para IQ 10 e IQ 100.
+- Dejar las capacidades en AUTO.
+- Activar Debug Combat y Debug AI Scores.
+- Primero probar 1 vs 1.
+- Dejar que el enemigo te vea.
+- Esconderte detrás de una roca cercana.
+- IQ 100 debería permanecer en SEARCH/SOSPECHA, revisar la zona y poder mostrar PROX
+  si estás extremadamente cerca.
+- IQ bajo debería recordar peor, revisar menos puntos y abandonar antes.
+- En combate visible observar que APPROACH ceda a ATTACK/HOLD/CIRCLE/FLANK
+  al entrar en distancia táctica.
+
+IMPORTANTE
+----------
+La proximidad da una posición deliberadamente imprecisa. El enemigo no obtiene
+la hitbox, inputs ni posición exacta del jugador detrás de obstáculos.
+
+Los scripts fueron revisados estáticamente (funciones duplicadas, referencias
+entre módulos y delimitadores), pero la validación definitiva del parser se hace
+al abrirlos en Godot.

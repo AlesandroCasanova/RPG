@@ -23,6 +23,7 @@ var last_scores: Dictionary = {}
 var last_decision_confidence := 0.0
 var last_selected_score := 0.0
 var last_was_mistake := false
+var current_action_elapsed := 0.0
 
 var _random := RandomNumberGenerator.new()
 
@@ -39,6 +40,7 @@ func configure(ai_profile: EnemyAIProfile, seed_offset: int = 0) -> void:
 func update_timers(delta: float) -> void:
 	decision_time_left = maxf(decision_time_left - delta, 0.0)
 	commitment_time_left = maxf(commitment_time_left - delta, 0.0)
+	current_action_elapsed += maxf(delta, 0.0)
 
 
 func should_reconsider(force: bool = false) -> bool:
@@ -50,14 +52,16 @@ func decide(context: Dictionary) -> StringName:
 	last_scores = _apply_decision_uncertainty(last_raw_scores)
 	var ranked := _rank_actions(last_scores)
 	if ranked.is_empty():
+		if current_action != ACTION_HOLD:
+			current_action_elapsed = 0.0
 		current_action = ACTION_HOLD
 		last_was_mistake = false
 		last_selected_score = 0.0
 		last_decision_confidence = 0.0
 		decision_time_left = profile.get_effective_decision_interval()
 		commitment_time_left = _random.randf_range(
-			profile.minimum_commitment,
-			profile.maximum_commitment
+			profile.get_minimum_commitment(),
+			profile.get_maximum_commitment()
 		)
 		return current_action
 	var selected_index := 0
@@ -72,7 +76,10 @@ func decide(context: Dictionary) -> StringName:
 	if second_is_plausible and _random.randf() < profile.get_mistake_chance():
 		selected_index = 1
 		last_was_mistake = true
+	var previous_action := current_action
 	current_action = StringName(ranked[selected_index].get("action", ACTION_HOLD))
+	if current_action != previous_action:
+		current_action_elapsed = 0.0
 	last_selected_score = float(ranked[selected_index].get("score", 0.0))
 	var best_score := float(ranked[0].get("score", 0.0))
 	var second_score := float(ranked[1].get("score", best_score)) if ranked.size() > 1 else 0.0
@@ -83,8 +90,8 @@ func decide(context: Dictionary) -> StringName:
 	)
 	decision_time_left = profile.get_effective_decision_interval()
 	commitment_time_left = _random.randf_range(
-		profile.minimum_commitment,
-		profile.maximum_commitment
+		profile.get_minimum_commitment(),
+		profile.get_maximum_commitment()
 	)
 	return current_action
 
@@ -92,6 +99,10 @@ func decide(context: Dictionary) -> StringName:
 func interrupt_commitment() -> void:
 	commitment_time_left = 0.0
 	decision_time_left = 0.0
+
+
+func get_current_action_elapsed() -> float:
+	return maxf(current_action_elapsed, 0.0)
 
 
 func score_actions(context: Dictionary) -> Dictionary:
@@ -103,6 +114,9 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var cooldown_ready := bool(context.get("cooldown_ready", false))
 	var health_ratio := clampf(float(context.get("health_ratio", 1.0)), 0.0, 1.0)
 	var stamina_ratio := clampf(float(context.get("stamina_ratio", 1.0)), 0.0, 1.0)
+	var nearby_allies := maxi(int(context.get("nearby_allies", 0)), 0)
+	var group_attacking_count := maxi(int(context.get("group_attacking_count", 0)), 0)
+	var group_ready_count := maxi(int(context.get("group_ready_count", 0)), 0)
 	var distance := float(context.get("distance", 9999.0))
 	var role := StringName(context.get("role", &"support"))
 	var target_action := StringName(context.get("target_action", &"none"))
@@ -149,8 +163,17 @@ func score_actions(context: Dictionary) -> Dictionary:
 		1.0
 	)
 	var stance := StringName(context.get("stance", &"neutral"))
-	var group_attacking_count := maxi(int(context.get("group_attacking_count", 0)), 0)
-	var group_ready_count := maxi(int(context.get("group_ready_count", 1)), 1)
+	var suspicious := bool(context.get("suspicious", false))
+	var proximity := bool(context.get("proximity", false))
+	var perception_confidence := clampf(
+		float(context.get("perception_confidence", 0.0)),
+		0.0,
+		1.0
+	)
+	var approach_elapsed := maxf(
+		float(context.get("approach_elapsed", current_action_elapsed)),
+		0.0
+	)
 
 	# -----------------------------------------------------
 	# MEMORIA ADAPTATIVA
@@ -215,12 +238,16 @@ func score_actions(context: Dictionary) -> Dictionary:
 		1.0
 	)
 
-	var low_health_pressure := clampf(
-		(profile.retreat_health_ratio - health_ratio)
-		/ maxf(profile.retreat_health_ratio, 0.01),
-		0.0,
-		1.0
-	)
+	var effective_flee_health_ratio := profile.get_effective_flee_health_ratio()
+	var low_health_pressure := 0.0
+
+	if effective_flee_health_ratio > 0.0:
+		low_health_pressure = clampf(
+			(effective_flee_health_ratio - health_ratio)
+			/ maxf(effective_flee_health_ratio, 0.01),
+			0.0,
+			1.0
+		)
 
 	var danger_cue := (
 		1.0
@@ -246,7 +273,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var attack_score := 0.0
 
 	if attack_is_valid:
-		attack_score = profile.attack_utility * profile.aggression
+		attack_score = profile.get_action_utility(ACTION_ATTACK) * profile.aggression
 		attack_score *= stamina_ratio * 0.45 + 0.55
 
 		# Si todavia no llega, no considera esto un golpe inmediato: es una
@@ -301,28 +328,64 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# convertir cada ventana en un ataque simultaneo. El token grupal sigue
 	# siendo la barrera definitiva; esto solo mejora la intencion previa.
 	if group_attacking_count > 0 and group_ready_count > 1:
-		attack_score *= clampf(1.0 - float(group_attacking_count) * 0.12 * profile.teamwork, 0.58, 1.0)
+		attack_score *= clampf(1.0 - float(group_attacking_count) * 0.12 * profile.get_effective_teamwork(), 0.58, 1.0)
 
 	scores[ACTION_ATTACK] = attack_score
 
 	# -----------------------------------------------------
 	# APPROACH
 	# -----------------------------------------------------
-	var approach_score := profile.approach_utility
-	approach_score *= (
+	# APPROACH es una transicion, no una postura permanente. Solo compite
+	# mientras existe contacto visual; si el objetivo se oculta corresponde
+	# SEARCH, no perseguir una posicion memorizada como si siguiera visible.
+	var approach_score := profile.get_action_utility(ACTION_APPROACH)
+	approach_score *= 1.0 if aware and visible else 0.0
+
+	var transition_distance := profile.get_approach_transition_distance()
+	var far_factor := clampf(
+		(distance - transition_distance)
+		/ maxf(transition_distance, 1.0),
+		0.0,
 		1.0
-		if aware and (visible or can_pursue_memory)
-		else 0.0
 	)
-	approach_score *= clampf(
-		distance / maxf(profile.preferred_distance, 1.0),
-		0.12,
-		2.1
-	)
+
+	if distance > transition_distance:
+		approach_score *= 0.72 + far_factor * 1.20
+	else:
+		# Una vez dentro del rango tactico, acercarse pierde casi toda su
+		# prioridad y cede a setup/hold/circle/flank/attack.
+		var close_ratio := clampf(
+			distance / maxf(transition_distance, 1.0),
+			0.0,
+			1.0
+		)
+		approach_score *= lerpf(0.10, 0.42, close_ratio)
+
 	approach_score *= 1.15 if role == &"pressure" else 0.72
+
+	# Si ya existe una postura de ataque viable, caminar hacia delante no debe
+	# ganarle sistematicamente a preparar el golpe.
+	if attack_setup_viable:
+		approach_score *= 0.24
 
 	if danger_cue > 0.0 and inside_target_threat:
 		approach_score *= 0.30
+
+	# Fatiga de aproximacion: cuanto mas tiempo lleva persiguiendo dentro de una
+	# distancia razonable, mas fuerte es la obligacion de reconsiderar.
+	if current_action == ACTION_APPROACH and distance <= transition_distance * 1.35:
+		var max_approach_time := profile.get_approach_max_continuous_time()
+		var fatigue := clampf(
+			(approach_elapsed - max_approach_time)
+			/ maxf(max_approach_time, 0.10),
+			0.0,
+			1.0
+		)
+		approach_score *= lerpf(
+			1.0,
+			1.0 - profile.get_approach_fatigue_strength(),
+			fatigue
+		)
 
 	if adaptive_weight > 0.0:
 		approach_score *= (
@@ -341,14 +404,15 @@ func score_actions(context: Dictionary) -> Dictionary:
 			)
 
 	scores[ACTION_APPROACH] = approach_score
-
 	# -----------------------------------------------------
 	# HOLD / BAIT
 	# -----------------------------------------------------
-	var hold_score := profile.hold_utility * profile.patience
+	var hold_score := profile.get_action_utility(ACTION_HOLD) * profile.patience
 	hold_score *= 1.25 if role in [&"support", &"waiting"] else 0.45
 	hold_score *= 1.0 if aware else 0.0
 	hold_score += (1.0 - stamina_ratio) * 0.4
+	if visible and distance <= profile.get_approach_transition_distance():
+		hold_score *= 1.0 + profile.get_intelligence_ratio() * 0.48
 
 	if adaptive_weight > 0.0:
 		# Un jugador que entra mucho hacia el enemigo puede ser cebado: sostener
@@ -371,9 +435,11 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# FLANK
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_FLANK):
-		var flank_score := profile.flank_utility * profile.teamwork
+		var flank_score := profile.get_action_utility(ACTION_FLANK) * profile.get_effective_teamwork()
 		flank_score *= 1.35 if role == &"flank" else 0.18
 		flank_score *= 1.0 if aware and visible else 0.0
+		if distance <= profile.get_approach_transition_distance() * 1.20:
+			flank_score *= 1.0 + profile.get_intelligence_ratio() * 0.30
 
 		if adaptive_weight > 0.0:
 			flank_score *= (
@@ -388,36 +454,89 @@ func score_actions(context: Dictionary) -> Dictionary:
 		scores[ACTION_FLANK] = flank_score
 
 	# -----------------------------------------------------
-	# RETREAT
+	# RETREAT / HUIDA DE BAJA VIDA
 	# -----------------------------------------------------
-	if profile.is_capability_enabled(EnemyAIProfile.CAP_FLEE):
-		var retreat_score := (
-			profile.retreat_utility
-			* low_health_pressure
-			* (3.0 - profile.courage)
+	# RETREAT táctico y "huir por poca vida" ya no son lo mismo.
+	# Cualquier combatiente puede retroceder unos metros por stamina/peligro.
+	# La contribución fuerte por HP bajo depende de personalidad, coraje y
+	# flee_mode (AUTO / DISABLED / ENABLED).
+	var tactical_retreat_score := (
+		profile.get_action_utility(ACTION_RETREAT)
+		* (
+			(1.0 - stamina_ratio) * 0.16
+			+ danger_cue * 0.14
 		)
+	)
 
-		retreat_score += (1.0 - stamina_ratio) * 0.26
-		retreat_score += danger_cue * 0.2
-		retreat_score *= 1.0 if aware else 0.0
+	var low_health_flee_score := 0.0
 
-		if adaptive_weight > 0.0 and aware:
-			retreat_score += (
-				adaptive_weight
-				* player_attack_pressure
-				* (0.12 + (1.0 - stamina_ratio) * 0.22)
+	if profile.can_flee_from_low_health() and low_health_pressure > 0.0:
+		var willingness := profile.get_low_health_flee_willingness()
+		var flee_quality := profile.get_low_health_flee_quality()
+
+		# Estar aislado hace más razonable abandonar el combate.
+		# Tener aliados comprometidos o listos reduce la urgencia.
+		var isolation_factor := 1.0
+		if nearby_allies <= 0:
+			isolation_factor = lerpf(1.08, 1.42, flee_quality)
+		else:
+			var visible_support := float(
+				min(nearby_allies, group_attacking_count + group_ready_count)
+			)
+			var support_ratio := clampf(
+				visible_support / maxf(float(nearby_allies), 1.0),
+				0.0,
+				1.0
+			)
+			isolation_factor = lerpf(
+				1.0,
+				0.72,
+				support_ratio * flee_quality
 			)
 
-		scores[ACTION_RETREAT] = retreat_score
+		low_health_flee_score = (
+			profile.get_action_utility(ACTION_RETREAT)
+			* low_health_pressure
+			* lerpf(0.70, 2.15, willingness)
+			* isolation_factor
+		)
+
+		# Poca stamina agrava una retirada real, especialmente para IA capaz de
+		# reconocer que no puede seguir esquivando/atacando con seguridad.
+		low_health_flee_score *= (
+			1.0
+			+ (1.0 - stamina_ratio)
+			* lerpf(0.08, 0.34, flee_quality)
+		)
+
+	var retreat_score := tactical_retreat_score + low_health_flee_score
+	retreat_score *= 1.0 if aware else 0.0
+
+	if adaptive_weight > 0.0 and aware:
+		retreat_score += (
+			adaptive_weight
+			* player_attack_pressure
+			* (0.06 + (1.0 - stamina_ratio) * 0.12)
+		)
+
+	scores[ACTION_RETREAT] = retreat_score
 
 	# -----------------------------------------------------
 	# SEARCH
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_SEARCH):
-		var search_score := (
-			profile.search_utility
-			* (1.0 if aware and not visible else 0.0)
-		)
+		var search_score := profile.get_action_utility(ACTION_SEARCH)
+		search_score *= 1.0 if aware and not visible else 0.0
+		if search_score > 0.0:
+			# Sospecha y proximidad convierten SEARCH en una investigacion activa.
+			# El IQ alto mantiene mejor el foco; el bajo sigue pudiendo abandonar.
+			var search_focus := lerpf(0.76, 1.38, profile.get_intelligence_ratio())
+			search_score *= search_focus
+			search_score *= 1.0 + perception_confidence * 0.34
+			if suspicious:
+				search_score *= 1.38
+			if proximity:
+				search_score *= 1.42
 		scores[ACTION_SEARCH] = search_score
 
 	# -----------------------------------------------------
@@ -435,7 +554,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 		)
 
 		var circle_score := (
-			profile.circle_utility
+			profile.get_action_utility(ACTION_CIRCLE)
 			* (0.45 + distance_fit * 0.55)
 		)
 
@@ -445,6 +564,8 @@ func score_actions(context: Dictionary) -> Dictionary:
 			else 0.55
 		)
 		circle_score *= 1.0 if visible else 0.0
+		if visible and distance <= profile.get_approach_transition_distance() * 1.15:
+			circle_score *= 1.0 + profile.get_intelligence_ratio() * 0.36
 
 		if adaptive_weight > 0.0:
 			circle_score *= (
@@ -463,7 +584,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# COVER
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_COVER):
-		var cover_score := profile.cover_utility
+		var cover_score := profile.get_action_utility(ACTION_COVER)
 		cover_score *= (
 			1.0
 			if cover_available and visible
@@ -493,7 +614,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# DODGE
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_DODGE):
-		var dodge_score := profile.dodge_utility * maxf(danger_cue, threat_danger)
+		var dodge_score := profile.get_action_utility(ACTION_DODGE) * maxf(danger_cue, threat_danger)
 		if threat_danger > 0.0:
 			dodge_score *= 0.72 + threat_danger * 0.95
 		else:
@@ -519,7 +640,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# INTERRUPT
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_INTERRUPT):
-		var interrupt_score := profile.interrupt_utility
+		var interrupt_score := profile.get_action_utility(ACTION_INTERRUPT)
 		interrupt_score *= (
 			1.0
 			if (
@@ -586,6 +707,10 @@ func score_actions(context: Dictionary) -> Dictionary:
 		and float(scores[current_action]) > 0.0
 	):
 		var persistence_bonus := 0.08
+		if current_action == ACTION_APPROACH:
+			var max_approach_time := profile.get_approach_max_continuous_time()
+			if current_action_elapsed >= max_approach_time:
+				persistence_bonus = 0.0
 		persistence_bonus += (
 			adaptive_weight
 			* (0.04 + profile.patience * 0.03)
