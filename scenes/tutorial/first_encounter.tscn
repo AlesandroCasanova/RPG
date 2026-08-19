@@ -45,12 +45,29 @@ npc_data = ExtResource("15_nara_data")
 
 [node name="GoblinScout" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="5" unique_id=1397102588 instance=ExtResource("10_goblin_common")]
 position = Vector2(3180, 760)
+body_collision_layer = null
+body_collision_mask = null
+attack_collision_mask = null
+debug_combat = null
+debug_ai_scores = null
 
 [node name="GoblinForager" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="6" unique_id=313372936 instance=ExtResource("10_goblin_common")]
+visible = false
 position = Vector2(3310, 835)
+body_collision_layer = null
+body_collision_mask = null
+attack_collision_mask = null
+debug_combat = null
+debug_ai_scores = null
 
 [node name="GoblinGuard" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="7" unique_id=2131793348 instance=ExtResource("18_goblin_elite")]
+visible = false
 position = Vector2(3420, 720)
+body_collision_layer = null
+body_collision_mask = null
+attack_collision_mask = null
+debug_combat = null
+debug_ai_scores = null
 
 [node name="WildBerries" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="8" unique_id=672129411 instance=ExtResource("11_gather")]
 position = Vector2(1590, 665)

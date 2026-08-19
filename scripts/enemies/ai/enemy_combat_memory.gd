@@ -145,7 +145,7 @@ func record_damage_received(was_in_windup: bool) -> void:
 	_damage_received_signal += weight
 	if was_in_windup:
 		_windup_punished_signal += weight
-	_evidence += weight * 0.75
+		_evidence += weight * 0.75
 	else:
 		_evidence += weight * 0.25
 

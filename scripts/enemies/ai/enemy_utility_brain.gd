@@ -99,6 +99,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var aware := bool(context.get("aware", false))
 	var can_attack := bool(context.get("can_attack", false))
 	var attack_reaches := bool(context.get("attack_reaches", false))
+	var attack_setup_viable := bool(context.get("attack_setup_viable", false))
 	var cooldown_ready := bool(context.get("cooldown_ready", false))
 	var health_ratio := clampf(float(context.get("health_ratio", 1.0)), 0.0, 1.0)
 	var stamina_ratio := clampf(float(context.get("stamina_ratio", 1.0)), 0.0, 1.0)
@@ -231,7 +232,7 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var attack_is_valid := (
 		visible
 		and can_attack
-		and attack_reaches
+		and (attack_reaches or attack_setup_viable)
 		and cooldown_ready
 	)
 	var attack_score := 0.0
@@ -239,6 +240,16 @@ func score_actions(context: Dictionary) -> Dictionary:
 	if attack_is_valid:
 		attack_score = profile.attack_utility * profile.aggression
 		attack_score *= stamina_ratio * 0.45 + 0.55
+
+		# Si todavia no llega, no considera esto un golpe inmediato: es una
+		# intencion de entrar en postura, alinear distancia y recien comprometer.
+		if not attack_reaches:
+			var setup_distance_factor := 1.0 - clampf(
+				distance / maxf(profile.attack_setup_max_distance, 1.0),
+				0.0,
+				1.0
+			)
+			attack_score *= 0.58 + setup_distance_factor * 0.30
 
 		if (
 			target_recovering

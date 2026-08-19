@@ -34,7 +34,9 @@ var move_speed: float = 120.0
 
 @export_category("Movilidad especial")
 
-@export var can_dash: bool = false
+## Habilita fisicamente el dash para este tipo de enemigo. La IA decide si
+## sabe/cuando usarlo mediante EnemyAIProfile y su stamina interna.
+@export var can_dash: bool = true
 
 @export_range(0.0, 3000.0, 1.0)
 var dash_speed: float = 620.0

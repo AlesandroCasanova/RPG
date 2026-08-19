@@ -196,6 +196,90 @@ var cover_hold_duration: float = 1.15
 var danger_padding: float = 30.0
 
 
+@export_category("Movimiento tactico")
+
+## Tiempo base durante el que un flanco/soporte mantiene su ancla espacial
+## antes de aceptar otro punto. Evita perseguir objetivos tacticos que cambian
+## cada frame.
+@export_range(0.10, 3.0, 0.05)
+var tactical_anchor_lock_time: float = 0.65
+
+## Si el jugador se aleja esta distancia del origen usado para crear el ancla,
+## se permite recalcular antes de que termine el compromiso.
+@export_range(5.0, 500.0, 1.0)
+var tactical_anchor_retarget_distance: float = 58.0
+
+## Distancia maxima desde la que la IA puede decidir preparar un ataque aunque
+## la hitbox todavia no alcance.
+@export_range(20.0, 600.0, 1.0)
+var attack_setup_max_distance: float = 175.0
+
+## En que parte util del alcance intenta colocarse antes de atacar.
+## 0 = muy cerca del inicio de la hitbox, 1 = cerca del borde exterior.
+@export_range(0.05, 0.95, 0.05)
+var attack_setup_reach_ratio: float = 0.72
+
+## Tolerancia para considerar alcanzada la postura de preparacion.
+@export_range(2.0, 80.0, 1.0)
+var attack_setup_position_tolerance: float = 13.0
+
+## Movimiento del objetivo necesario para recalcular una postura de ataque.
+@export_range(5.0, 300.0, 1.0)
+var attack_setup_retarget_distance: float = 42.0
+
+## Pausa de estabilizacion de una IA muy basica antes de comprometer el golpe.
+@export_range(0.0, 1.0, 0.01)
+var attack_setup_hold_at_zero: float = 0.30
+
+## Pausa de estabilizacion de una IA maestra antes de comprometer el golpe.
+@export_range(0.0, 1.0, 0.01)
+var attack_setup_hold_at_hundred: float = 0.07
+
+## Cuanto angulo lateral intenta construir una IA basica al preparar un golpe.
+@export_range(0.0, 60.0, 1.0)
+var attack_setup_angle_at_zero_degrees: float = 3.0
+
+## Cuanto angulo lateral intenta construir una IA experta al preparar un golpe.
+@export_range(0.0, 90.0, 1.0)
+var attack_setup_angle_at_hundred_degrees: float = 24.0
+
+## Longitud del siguiente paso tactico durante una orbita.
+@export_range(10.0, 250.0, 1.0)
+var circle_step_distance: float = 52.0
+
+## Fuerza tangencial de la orbita alrededor del jugador.
+@export_range(0.1, 3.0, 0.05)
+var circle_tangent_strength: float = 1.0
+
+## Cuanto corrige el radio mientras rodea al objetivo.
+@export_range(0.1, 4.0, 0.05)
+var circle_radial_correction: float = 1.25
+
+## Paso lateral/diagonal breve que intenta hacer despues de terminar un ataque.
+@export_range(0.0, 250.0, 1.0)
+var post_attack_reposition_distance: float = 56.0
+
+## Tiempo maximo dedicado a ese reposicionamiento.
+@export_range(0.0, 2.0, 0.01)
+var post_attack_reposition_duration: float = 0.34
+
+## Distancia minima al objetivo tactico para gastar dash al acercarse.
+@export_range(20.0, 1000.0, 1.0)
+var approach_dash_min_distance: float = 205.0
+
+## Distancia minima para usar dash al flanquear, retirarse o reposicionarse.
+@export_range(20.0, 1000.0, 1.0)
+var reposition_dash_min_distance: float = 125.0
+
+## Porcentaje de stamina que intenta conservar despues de un dash tactico.
+@export_range(0.0, 1.0, 0.05)
+var dash_stamina_reserve_ratio: float = 0.20
+
+## Margen para no pasarse de largo del punto deseado con el dash.
+@export_range(0.0, 200.0, 1.0)
+var dash_stop_buffer: float = 28.0
+
+
 @export_category("Pesos de utilidad")
 
 @export_range(0.0, 5.0, 0.05)
@@ -227,6 +311,40 @@ var dodge_utility: float = 1.8
 
 @export_range(0.0, 5.0, 0.05)
 var interrupt_utility: float = 1.45
+
+
+func get_tactical_anchor_lock_time() -> float:
+	var skill := get_intelligence_ratio()
+	return maxf(
+		tactical_anchor_lock_time * lerpf(0.78, 1.18, skill),
+		0.10
+	)
+
+
+func get_attack_setup_hold_time() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	var base_time := lerpf(
+		attack_setup_hold_at_zero,
+		attack_setup_hold_at_hundred,
+		skill
+	)
+	# La paciencia estira un poco la preparacion; la agresividad la acorta.
+	var personality_factor := clampf(
+		1.0 + (patience - 1.0) * 0.18 - (aggression - 1.0) * 0.12,
+		0.72,
+		1.35
+	)
+	return maxf(base_time * personality_factor, 0.0)
+
+
+func get_attack_setup_angle_bias_radians() -> float:
+	var skill := get_intelligence_ratio()
+	var angle_degrees := lerpf(
+		attack_setup_angle_at_zero_degrees,
+		attack_setup_angle_at_hundred_degrees,
+		skill
+	)
+	return deg_to_rad(angle_degrees)
 
 
 func get_intelligence_ratio() -> float:
@@ -353,7 +471,7 @@ func _get_capability_threshold(capability: StringName) -> float:
 		CAP_ADAPT_ATTACKS: return 50.0
 		CAP_READ_TELEGRAPHS: return 60.0
 		CAP_DODGE: return 65.0
-		CAP_DASH: return 70.0
+		CAP_DASH: return 50.0
 		CAP_INTERRUPT: return 70.0
 		CAP_CHARGED_ATTACK: return 75.0
 		CAP_PREDICT: return 80.0
