@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/tutorial/frontier_environment.tscn" id="5_environment"]
 [ext_resource type="Script" uid="uid://cxu1neicw7nyp" path="res://scripts/tutorial/first_encounter_controller.gd" id="6_controller"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/ivar/ivar.tscn" id="7_ivar"]
+[ext_resource type="Script" uid="uid://co4wldirw0gtb" path="res://scripts/enemies/ai/enemy_ai_profile.gd" id="7_ntglj"]
 [ext_resource type="PackedScene" path="res://scenes/ui/world_map_ui.tscn" id="9_map"]
 [ext_resource type="PackedScene" uid="uid://1gu8xn8fedft" path="res://scenes/enemies/goblin/goblin_common.tscn" id="10_goblin_common"]
 [ext_resource type="PackedScene" path="res://scenes/items/gatherable_resource.tscn" id="11_gather"]
@@ -17,6 +18,79 @@
 [ext_resource type="PackedScene" path="res://scenes/tutorial/investigation_point.tscn" id="16_investigation"]
 [ext_resource type="Script" uid="uid://cj2awt78n4i7e" path="res://scripts/enemies/ai/enemy_cover_point.gd" id="17_cover"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/goblin/goblin_elite.tscn" id="18_goblin_elite"]
+
+[sub_resource type="Resource" id="Resource_lslw2"]
+script = ExtResource("7_ntglj")
+intelligence_percent = 10.0
+decision_error_multiplier = 0.0
+reaction_time_multiplier = 0.5
+memory_error_multiplier = 0.0
+flee_mode = 2
+search_mode = 2
+heavy_attack_mode = 2
+teamwork_mode = 2
+flank_mode = 2
+circle_mode = 2
+cover_mode = 2
+adapt_attacks_mode = 2
+read_telegraphs_mode = 2
+dodge_mode = 2
+dash_mode = 2
+interrupt_mode = 2
+charged_attack_mode = 2
+predict_mode = 2
+reaction_time_at_hundred = 0.05
+decision_noise_at_hundred = 0.0
+mistake_chance_at_hundred = 0.0
+memory_position_error_at_hundred = 0.0
+prediction_horizon_at_hundred = 0.8
+decision_interval = 0.34
+minimum_commitment = 0.6
+maximum_commitment = 0.95
+aggression = 1.25
+courage = 0.55
+teamwork = 0.25
+patience = 0.25
+retreat_health_ratio = 0.28
+adaptive_memory_half_life = 12.0
+adaptive_learning_strength = 2.0
+adaptive_influence = 1.4
+adaptive_evidence_at_hundred = 1.0
+attack_history_influence = 1.0
+preferred_distance = 54.0
+flank_radius = 95.0
+support_radius = 105.0
+retreat_distance = 170.0
+circle_radius = 72.0
+cover_search_radius = 190.0
+cover_hold_duration = 0.7
+danger_padding = 22.0
+tactical_anchor_lock_time = 0.9
+tactical_anchor_retarget_distance = 70.0
+attack_setup_max_distance = 220.0
+attack_setup_position_tolerance = 10.0
+attack_setup_retarget_distance = 55.0
+attack_setup_hold_at_hundred = 0.05
+attack_setup_angle_at_hundred_degrees = 30.0
+circle_step_distance = 60.0
+circle_tangent_strength = 1.2000000000000002
+circle_radial_correction = 1.4000000000000001
+post_attack_reposition_distance = 70.0
+post_attack_reposition_duration = 0.45
+approach_dash_min_distance = 170.0
+reposition_dash_min_distance = 95.0
+dash_stamina_reserve_ratio = 0.1
+dash_stop_buffer = 25.0
+attack_utility = 1.65
+approach_utility = 1.25
+flank_utility = 0.2
+hold_utility = 0.35
+retreat_utility = 1.75
+search_utility = 0.55
+circle_utility = 0.1
+cover_utility = 0.1
+dodge_utility = 0.1
+interrupt_utility = 0.1
 
 [node name="FirstEncounter" type="Node2D" unique_id=455872762]
 
@@ -45,67 +119,60 @@ npc_data = ExtResource("15_nara_data")
 
 [node name="GoblinScout" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="5" unique_id=1397102588 instance=ExtResource("10_goblin_common")]
 position = Vector2(3180, 760)
-body_collision_layer = null
-body_collision_mask = null
-attack_collision_mask = null
-debug_combat = null
-debug_ai_scores = null
+debug_combat = true
 
-[node name="GoblinForager" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="6" unique_id=313372936 instance=ExtResource("10_goblin_common")]
+[node name="GoblinScout2" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="6" unique_id=1388313946 instance=ExtResource("10_goblin_common")]
+position = Vector2(2998, 965)
+ai_profile = SubResource("Resource_lslw2")
+debug_combat = true
+
+[node name="GoblinForager" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="7" unique_id=313372936 instance=ExtResource("10_goblin_common")]
 visible = false
 position = Vector2(3310, 835)
-body_collision_layer = null
-body_collision_mask = null
-attack_collision_mask = null
-debug_combat = null
-debug_ai_scores = null
+debug_combat = true
 
-[node name="GoblinGuard" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="7" unique_id=2131793348 instance=ExtResource("18_goblin_elite")]
+[node name="GoblinGuard" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="8" unique_id=2131793348 instance=ExtResource("18_goblin_elite")]
 visible = false
 position = Vector2(3420, 720)
-body_collision_layer = null
-body_collision_mask = null
-attack_collision_mask = null
-debug_combat = null
-debug_ai_scores = null
+debug_combat = true
 
-[node name="WildBerries" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="8" unique_id=672129411 instance=ExtResource("11_gather")]
+[node name="WildBerries" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="9" unique_id=672129411 instance=ExtResource("11_gather")]
 position = Vector2(1590, 665)
 item_data = ExtResource("12_berries")
 quantity = 4
 
-[node name="FieldFibers" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="9" unique_id=2112727618 instance=ExtResource("11_gather")]
+[node name="FieldFibers" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="10" unique_id=2112727618 instance=ExtResource("11_gather")]
 position = Vector2(1980, 830)
 item_data = ExtResource("13_fibers")
 quantity = 6
 
-[node name="RustScrap" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="10" unique_id=2084643502 instance=ExtResource("11_gather")]
+[node name="RustScrap" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="11" unique_id=2084643502 instance=ExtResource("11_gather")]
 position = Vector2(2380, 690)
 item_data = ExtResource("14_scrap")
 quantity = 3
 
-[node name="CouncilInvestigation" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="11" unique_id=1563453415 instance=ExtResource("16_investigation")]
+[node name="CouncilInvestigation" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="12" unique_id=1563453415 instance=ExtResource("16_investigation")]
 position = Vector2(3660, 1120)
 point_id = &"council_investigation"
 
-[node name="CoverWestRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="12" unique_id=1272591386]
+[node name="CoverWestRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="13" unique_id=1272591386]
 position = Vector2(3185, 720)
 script = ExtResource("17_cover")
 cover_quality = 1.15
 designer_confirmed_cover = false
 
-[node name="CoverNorthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="13" unique_id=1184314397]
+[node name="CoverNorthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="14" unique_id=1184314397]
 position = Vector2(3385, 600)
 script = ExtResource("17_cover")
 designer_confirmed_cover = false
 
-[node name="CoverEastRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="14" unique_id=1040767305]
+[node name="CoverEastRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="15" unique_id=1040767305]
 position = Vector2(3495, 790)
 script = ExtResource("17_cover")
 cover_quality = 1.25
 designer_confirmed_cover = false
 
-[node name="CoverSouthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="15" unique_id=337251374]
+[node name="CoverSouthRocks" type="Marker2D" parent="World/Environment" parent_id_path=PackedInt32Array(1648102418, 573763245) index="16" unique_id=337251374]
 position = Vector2(3395, 1010)
 script = ExtResource("17_cover")
 cover_quality = 0.9

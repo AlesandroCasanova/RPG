@@ -143,6 +143,14 @@ func score_actions(context: Dictionary) -> Dictionary:
 	var interrupt_reaches := bool(
 		context.get("interrupt_reaches", false)
 	)
+	var threat_danger := clampf(
+		float(context.get("threat_danger", 0.0)),
+		0.0,
+		1.0
+	)
+	var stance := StringName(context.get("stance", &"neutral"))
+	var group_attacking_count := maxi(int(context.get("group_attacking_count", 0)), 0)
+	var group_ready_count := maxi(int(context.get("group_ready_count", 1)), 1)
 
 	# -----------------------------------------------------
 	# MEMORIA ADAPTATIVA
@@ -285,6 +293,15 @@ func score_actions(context: Dictionary) -> Dictionary:
 				* player_retreat_tendency
 				* 0.10
 			)
+
+	if threat_danger > 0.0:
+		attack_score *= lerpf(1.0, 0.34, threat_danger)
+
+	# Si ya hay aliados comprometidos, una personalidad cooperativa evita
+	# convertir cada ventana en un ataque simultaneo. El token grupal sigue
+	# siendo la barrera definitiva; esto solo mejora la intencion previa.
+	if group_attacking_count > 0 and group_ready_count > 1:
+		attack_score *= clampf(1.0 - float(group_attacking_count) * 0.12 * profile.teamwork, 0.58, 1.0)
 
 	scores[ACTION_ATTACK] = attack_score
 
@@ -476,8 +493,11 @@ func score_actions(context: Dictionary) -> Dictionary:
 	# DODGE
 	# -----------------------------------------------------
 	if profile.is_capability_enabled(EnemyAIProfile.CAP_DODGE):
-		var dodge_score := profile.dodge_utility * danger_cue
-		dodge_score *= 1.0 if inside_target_threat else 0.22
+		var dodge_score := profile.dodge_utility * maxf(danger_cue, threat_danger)
+		if threat_danger > 0.0:
+			dodge_score *= 0.72 + threat_danger * 0.95
+		else:
+			dodge_score *= 1.0 if inside_target_threat else 0.22
 		dodge_score *= 1.25 if dash_ready else 0.72
 		dodge_score *= stamina_ratio * 0.45 + 0.55
 
@@ -523,6 +543,40 @@ func score_actions(context: Dictionary) -> Dictionary:
 			)
 
 		scores[ACTION_INTERRUPT] = interrupt_score
+
+	# -----------------------------------------------------
+	# POSTURA Y PERSONALIDAD
+	# -----------------------------------------------------
+	# La postura describe el estado tactico del momento; la personalidad
+	# describe el estilo estable del enemigo. Se combinan sin alterar el IQ.
+	for action_variant: Variant in scores:
+		var action := StringName(action_variant)
+		var score := float(scores[action_variant])
+		if score <= 0.0:
+			continue
+
+		match stance:
+			&"defensive":
+				if action in [ACTION_DODGE, ACTION_RETREAT, ACTION_COVER, ACTION_HOLD, ACTION_CIRCLE]:
+					score *= 1.22
+				elif action in [ACTION_ATTACK, ACTION_APPROACH]:
+					score *= 0.76
+			&"aggressive":
+				if action in [ACTION_ATTACK, ACTION_APPROACH, ACTION_INTERRUPT]:
+					score *= 1.18
+				elif action in [ACTION_RETREAT, ACTION_COVER]:
+					score *= 0.78
+			&"pressure":
+				if action in [ACTION_APPROACH, ACTION_ATTACK, ACTION_FLANK]:
+					score *= 1.16
+			&"punish":
+				if action in [ACTION_ATTACK, ACTION_INTERRUPT]:
+					score *= 1.34
+				elif action in [ACTION_RETREAT, ACTION_SEARCH]:
+					score *= 0.72
+
+		score *= profile.get_personality_action_multiplier(action)
+		scores[action_variant] = score
 
 	# -----------------------------------------------------
 	# PERSISTENCIA

@@ -7,6 +7,11 @@ static var _active_enemies_cache: Dictionary = {}
 static var _component_cache: Dictionary = {}
 static var _ranking_cache: Dictionary = {}
 
+# Tokens persistentes: evitan que varios miembros comiencen el golpe en el
+# mismo instante aunque todos hayan encontrado una ventana valida.
+static var _attack_tokens: Dictionary = {}
+static var _last_attack_start_by_component: Dictionary = {}
+
 
 func get_assignment(
 	subject: CharacterBody2D,
@@ -29,6 +34,9 @@ func get_assignment(
 	if my_index < 0:
 		return result
 	var pressure_count := mini(_get_attack_token_count(ranked), ranked.size())
+	var pressure_snapshot := get_pressure_snapshot(subject, subject_data)
+	result["group_attacking_count"] = int(pressure_snapshot.get("attacking", 0))
+	result["group_ready_count"] = ranked.size()
 	if my_index < pressure_count:
 		result["role"] = &"pressure"
 		result["can_attack"] = true
@@ -72,6 +80,116 @@ func get_assignment(
 		PI / float(waiting_count)
 	)
 	return result
+
+
+func request_attack_commit(
+	subject: CharacterBody2D,
+	subject_data: EnemyData,
+	subject_profile: EnemyAIProfile,
+	expected_duration: float
+) -> bool:
+	if subject == null or subject_data == null or subject_profile == null:
+		return false
+	_cleanup_attack_tokens()
+	var subject_id := subject.get_instance_id()
+	if _attack_tokens.has(subject_id):
+		refresh_attack_commit(subject, subject_profile, expected_duration)
+		return true
+	var active := get_active_enemies(subject.get_tree())
+	var component := _filter_squad(active, subject, subject_data)
+	var member_ids := _member_id_set(component)
+	var limit := mini(_get_attack_token_count(component), component.size())
+	var active_count := 0
+	for token_id: Variant in _attack_tokens:
+		if member_ids.has(int(token_id)):
+			active_count += 1
+	if active_count >= maxi(limit, 1):
+		return false
+	var component_key := _component_key(component, subject_data.squad_id)
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	var last_start := float(_last_attack_start_by_component.get(component_key, -9999.0))
+	if active_count > 0 and now - last_start < subject_profile.team_attack_stagger:
+		return false
+	_attack_tokens[subject_id] = {
+		"enemy": weakref(subject),
+		"component": component_key,
+		"expires": now + maxf(expected_duration, 0.05) + subject_profile.attack_token_grace
+	}
+	_last_attack_start_by_component[component_key] = now
+	return true
+
+
+func refresh_attack_commit(
+	subject: CharacterBody2D,
+	subject_profile: EnemyAIProfile,
+	expected_duration: float
+) -> void:
+	if subject == null or subject_profile == null:
+		return
+	_cleanup_attack_tokens()
+	var subject_id := subject.get_instance_id()
+	if not _attack_tokens.has(subject_id):
+		return
+	var token: Dictionary = _attack_tokens[subject_id]
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	token["expires"] = now + maxf(expected_duration, 0.05) + subject_profile.attack_token_grace
+	_attack_tokens[subject_id] = token
+
+
+func release_attack_commit(subject: CharacterBody2D) -> void:
+	if subject == null:
+		return
+	_attack_tokens.erase(subject.get_instance_id())
+
+
+func get_pressure_snapshot(
+	subject: CharacterBody2D,
+	subject_data: EnemyData
+) -> Dictionary:
+	if subject == null or subject_data == null:
+		return {"attacking": 0, "members": 0}
+	_cleanup_attack_tokens()
+	var active := get_active_enemies(subject.get_tree())
+	var component := _filter_squad(active, subject, subject_data)
+	var member_ids := _member_id_set(component)
+	var attacking := 0
+	for token_id: Variant in _attack_tokens:
+		if member_ids.has(int(token_id)):
+			attacking += 1
+	return {
+		"attacking": attacking,
+		"members": component.size()
+	}
+
+
+static func _cleanup_attack_tokens() -> void:
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	var erase_ids: Array[int] = []
+	for token_id: Variant in _attack_tokens:
+		var token: Dictionary = _attack_tokens[token_id]
+		var enemy_ref := token.get("enemy") as WeakRef
+		var enemy: Object = enemy_ref.get_ref() if enemy_ref != null else null
+		if enemy == null or now >= float(token.get("expires", 0.0)):
+			erase_ids.append(int(token_id))
+	for token_id: int in erase_ids:
+		_attack_tokens.erase(token_id)
+
+
+static func _member_id_set(members: Array[Node]) -> Dictionary:
+	var result: Dictionary = {}
+	for member: Node in members:
+		if is_instance_valid(member):
+			result[member.get_instance_id()] = true
+	return result
+
+
+static func _component_key(members: Array[Node], squad_id: StringName) -> String:
+	var ids: Array[int] = []
+	for member: Node in members:
+		if is_instance_valid(member):
+			ids.append(member.get_instance_id())
+	ids.sort()
+	return "%s|%s" % [String(squad_id), str(ids)]
 
 
 static func get_active_enemies(tree: SceneTree) -> Array[Node]:

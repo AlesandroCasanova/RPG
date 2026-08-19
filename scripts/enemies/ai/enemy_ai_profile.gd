@@ -8,6 +8,17 @@ enum CapabilityMode {
 	ENABLED
 }
 
+enum CombatPersonality {
+	BALANCED,
+	AGGRESSIVE,
+	CAUTIOUS,
+	OPPORTUNIST,
+	DUELIST,
+	BERSERKER,
+	PACK_HUNTER,
+	DEFENSIVE
+}
+
 
 const CAP_FLEE: StringName = &"flee"
 const CAP_SEARCH: StringName = &"search"
@@ -23,6 +34,7 @@ const CAP_DASH: StringName = &"dash"
 const CAP_INTERRUPT: StringName = &"interrupt"
 const CAP_CHARGED_ATTACK: StringName = &"charged_attack"
 const CAP_PREDICT: StringName = &"predict"
+const CAP_COMBO: StringName = &"combo"
 
 
 @export_category("Inteligencia")
@@ -59,6 +71,7 @@ var deterministic_seed: int = 0
 @export var interrupt_mode: CapabilityMode = CapabilityMode.AUTO
 @export var charged_attack_mode: CapabilityMode = CapabilityMode.AUTO
 @export var predict_mode: CapabilityMode = CapabilityMode.AUTO
+@export var combo_mode: CapabilityMode = CapabilityMode.AUTO
 
 
 @export_category("Reaccion e incertidumbre")
@@ -125,6 +138,11 @@ var maximum_commitment: float = 0.85
 
 
 @export_category("Personalidad")
+
+## Arquetipo de combate. No cambia el IQ: dos enemigos igual de inteligentes
+## pueden tomar decisiones distintas por personalidad.
+@export_enum("Equilibrado", "Agresivo", "Cauteloso", "Oportunista", "Duelista", "Berserker", "Cazador de manada", "Defensivo")
+var combat_personality: int = CombatPersonality.BALANCED
 
 @export_range(0.0, 2.0, 0.05)
 var aggression: float = 1.0
@@ -280,6 +298,88 @@ var dash_stamina_reserve_ratio: float = 0.20
 var dash_stop_buffer: float = 28.0
 
 
+@export_category("Lectura espacial y prediccion")
+
+## Estimacion visual del largo de una amenaza cuerpo a cuerpo del Player.
+## La IA no lee la hitbox privada: aproxima el peligro desde señales observables.
+@export_range(10.0, 300.0, 1.0)
+var player_threat_length_estimate: float = 78.0
+
+@export_range(10.0, 250.0, 1.0)
+var player_threat_width_estimate: float = 62.0
+
+@export_range(0.0, 100.0, 1.0)
+var player_threat_start_offset_estimate: float = 12.0
+
+@export_range(0.5, 3.0, 0.05)
+var heavy_threat_length_multiplier: float = 1.15
+
+@export_range(0.5, 3.0, 0.05)
+var charged_threat_length_multiplier: float = 1.35
+
+@export_range(0.0, 2.0, 0.01)
+var predictive_attack_extra_horizon: float = 0.22
+
+@export_range(0.0, 500.0, 1.0)
+var maximum_predictive_lead: float = 105.0
+
+@export_range(0.0, 1.0, 0.01)
+var predicted_danger_threshold: float = 0.22
+
+@export_range(20.0, 300.0, 1.0)
+var predictive_dodge_step_distance: float = 105.0
+
+@export_range(0.0, 100.0, 1.0)
+var predictive_dodge_safety_padding: float = 18.0
+
+
+@export_category("Posturas de combate")
+
+## Tiempo minimo que conserva una postura antes de cambiar por una razon menor.
+@export_range(0.05, 2.0, 0.01)
+var stance_lock_at_zero: float = 0.62
+
+@export_range(0.05, 2.0, 0.01)
+var stance_lock_at_hundred: float = 0.24
+
+
+@export_category("Coordinacion avanzada")
+
+## Separacion minima entre el inicio de ataques de miembros de la misma escuadra.
+@export_range(0.0, 2.0, 0.01)
+var team_attack_stagger: float = 0.18
+
+## Margen de seguridad del token de ataque por si una accion queda interrumpida.
+@export_range(0.1, 5.0, 0.05)
+var attack_token_grace: float = 0.75
+
+
+@export_category("Combos de IA")
+
+@export_range(1, 5, 1)
+var combo_max_steps: int = 3
+
+@export_range(0.0, 1.0, 0.01)
+var combo_chance_at_zero: float = 0.04
+
+@export_range(0.0, 1.0, 0.01)
+var combo_chance_at_hundred: float = 0.72
+
+## Pausa visual minima entre golpes encadenados.
+@export_range(0.0, 0.5, 0.01)
+var combo_link_delay: float = 0.07
+
+## Reserva de stamina que una IA intenta conservar al encadenar.
+@export_range(0.0, 1.0, 0.05)
+var combo_stamina_reserve_ratio: float = 0.12
+
+## Si esta activo, un combo normalmente continua solo tras conectar el golpe previo.
+@export var combo_prefers_confirmed_hit: bool = true
+
+@export_range(0.0, 2.0, 0.05)
+var combo_primary_to_heavy_bias: float = 0.70
+
+
 @export_category("Pesos de utilidad")
 
 @export_range(0.0, 5.0, 0.05)
@@ -311,6 +411,119 @@ var dodge_utility: float = 1.8
 
 @export_range(0.0, 5.0, 0.05)
 var interrupt_utility: float = 1.45
+
+
+func get_stance_lock_time() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.75)
+	return maxf(lerpf(stance_lock_at_zero, stance_lock_at_hundred, skill), 0.05)
+
+
+func get_threat_prediction_strength() -> float:
+	if not is_capability_enabled(CAP_READ_TELEGRAPHS):
+		return 0.0
+	var base := lerpf(0.25, 1.0, get_intelligence_ratio())
+	if is_capability_enabled(CAP_PREDICT):
+		base = minf(base + 0.22, 1.15)
+	return base
+
+
+func get_combo_probability() -> float:
+	if not is_capability_enabled(CAP_COMBO):
+		return 0.0
+	var skill := pow(get_intelligence_ratio(), 0.85)
+	var result := lerpf(combo_chance_at_zero, combo_chance_at_hundred, skill)
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			result *= 1.12
+		CombatPersonality.OPPORTUNIST:
+			result *= 1.18
+		CombatPersonality.DUELIST:
+			result *= 1.08
+		CombatPersonality.BERSERKER:
+			result *= 1.32
+		CombatPersonality.CAUTIOUS, CombatPersonality.DEFENSIVE:
+			result *= 0.72
+	return clampf(result, 0.0, 0.95)
+
+
+func get_personality_action_multiplier(action: StringName) -> float:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			match action:
+				&"attack": return 1.22
+				&"approach": return 1.18
+				&"retreat", &"cover": return 0.72
+		CombatPersonality.CAUTIOUS:
+			match action:
+				&"dodge", &"circle", &"hold", &"cover": return 1.18
+				&"attack": return 0.88
+		CombatPersonality.OPPORTUNIST:
+			match action:
+				&"attack", &"interrupt": return 1.18
+				&"hold", &"circle": return 1.08
+		CombatPersonality.DUELIST:
+			match action:
+				&"circle", &"dodge", &"attack": return 1.14
+				&"cover": return 0.72
+		CombatPersonality.BERSERKER:
+			match action:
+				&"attack", &"approach": return 1.35
+				&"retreat", &"cover", &"hold": return 0.48
+		CombatPersonality.PACK_HUNTER:
+			match action:
+				&"flank": return 1.34
+				&"circle", &"hold": return 1.12
+		CombatPersonality.DEFENSIVE:
+			match action:
+				&"dodge", &"retreat", &"cover", &"hold": return 1.28
+				&"attack", &"approach": return 0.78
+	return 1.0
+
+
+func get_personality_attack_kind_multiplier(attack_kind: int) -> float:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			if attack_kind == AttackData.AttackKind.HEAVY:
+				return 1.16
+		CombatPersonality.CAUTIOUS:
+			if attack_kind == AttackData.AttackKind.PRIMARY:
+				return 1.14
+			if attack_kind == AttackData.AttackKind.CHARGED:
+				return 0.72
+		CombatPersonality.OPPORTUNIST:
+			if attack_kind in [AttackData.AttackKind.HEAVY, AttackData.AttackKind.CHARGED]:
+				return 1.14
+		CombatPersonality.DUELIST:
+			if attack_kind == AttackData.AttackKind.PRIMARY:
+				return 1.18
+		CombatPersonality.BERSERKER:
+			if attack_kind == AttackData.AttackKind.HEAVY:
+				return 1.28
+			if attack_kind == AttackData.AttackKind.CHARGED:
+				return 1.12
+		CombatPersonality.DEFENSIVE:
+			if attack_kind == AttackData.AttackKind.PRIMARY:
+				return 1.12
+	return 1.0
+
+
+func get_personality_stance_multiplier(stance: StringName) -> float:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			return 1.28 if stance in [&"aggressive", &"pressure"] else (0.72 if stance == &"defensive" else 1.0)
+		CombatPersonality.CAUTIOUS:
+			return 1.26 if stance == &"defensive" else (1.10 if stance == &"neutral" else 0.92)
+		CombatPersonality.OPPORTUNIST:
+			return 1.34 if stance == &"punish" else 1.0
+		CombatPersonality.DUELIST:
+			return 1.18 if stance in [&"neutral", &"punish"] else 1.0
+		CombatPersonality.BERSERKER:
+			return 1.38 if stance in [&"aggressive", &"pressure"] else (0.45 if stance == &"defensive" else 1.0)
+		CombatPersonality.PACK_HUNTER:
+			return 1.22 if stance == &"pressure" else 1.0
+		CombatPersonality.DEFENSIVE:
+			return 1.38 if stance == &"defensive" else (0.74 if stance == &"aggressive" else 1.0)
+	return 1.0
 
 
 func get_tactical_anchor_lock_time() -> float:
@@ -475,6 +688,7 @@ func _get_capability_threshold(capability: StringName) -> float:
 		CAP_INTERRUPT: return 70.0
 		CAP_CHARGED_ATTACK: return 75.0
 		CAP_PREDICT: return 80.0
+		CAP_COMBO: return 60.0
 	return 101.0
 
 
@@ -494,4 +708,5 @@ func _get_capability_mode(capability: StringName) -> CapabilityMode:
 		CAP_INTERRUPT: return interrupt_mode
 		CAP_CHARGED_ATTACK: return charged_attack_mode
 		CAP_PREDICT: return predict_mode
+		CAP_COMBO: return combo_mode
 	return CapabilityMode.DISABLED

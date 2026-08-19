@@ -248,6 +248,42 @@ var received_knockback_velocity: Vector2 = Vector2.ZERO
 
 
 # =========================================================
+# COMBOS
+# =========================================================
+
+@export_category("Combos")
+
+## Cadena inicial: ataque principal -> ataque principal -> ataque secundario.
+@export var combos_enabled: bool = true
+
+## Ventana al final de cada golpe en la que se puede almacenar el siguiente input.
+@export_range(0.05, 0.50, 0.01)
+var combo_input_window: float = 0.18
+
+@export_range(0.5, 2.0, 0.05)
+var combo_second_primary_damage_multiplier: float = 1.10
+
+@export_range(0.5, 2.0, 0.05)
+var combo_second_primary_knockback_multiplier: float = 1.05
+
+@export_range(0.5, 2.0, 0.05)
+var combo_second_primary_duration_multiplier: float = 0.88
+
+@export_range(0.5, 3.0, 0.05)
+var combo_finisher_damage_multiplier: float = 1.25
+
+## El remate usa bastante knockback para poder activar el stagger del enemigo.
+@export_range(0.5, 4.0, 0.05)
+var combo_finisher_knockback_multiplier: float = 1.45
+
+@export_range(0.0, 200.0, 1.0)
+var combo_finisher_stamina_cost: float = 20.0
+
+@export_range(0.5, 2.0, 0.05)
+var combo_finisher_duration_multiplier: float = 0.88
+
+
+# =========================================================
 # CARGA
 # =========================================================
 
@@ -350,6 +386,10 @@ var current_attack_collision: CollisionShape2D = null
 var current_attack_debug: Polygon2D = null
 
 var hit_targets: Array[Node2D] = []
+
+# Combo 1 = primer principal, 2 = segundo principal, 3 = remate.
+var combo_step: int = 0
+var combo_queued_action: StringName = &""
 
 
 # =========================================================
@@ -1272,57 +1312,35 @@ func _update_heavy_attack_input(
 # =========================================================
 
 func _begin_heavy_charge() -> void:
-
 	if is_dead:
-
 		return
-
-
 	if is_dashing:
-
 		return
-
-
-	# Una carga que ya estaba activa puede continuar durante
-	# un knockback leve, pero no permitimos iniciar una carga
-	# nueva en mitad de un empuje.
 	if received_knockback_velocity != Vector2.ZERO:
-
 		return
 
-
+	# Durante el segundo golpe del combo, el click de ataque secundario no inicia
+	# una carga: queda almacenado como remate de la cadena.
 	if attack_action_time_left > 0.0:
-
+		if (
+			combos_enabled
+			and combo_step == 2
+			and combo_queued_action == &""
+			and attack_action_time_left <= combo_input_window
+		):
+			combo_queued_action = &"heavy_finisher"
+			print("COMBO: REMATE PESADO EN COLA")
 		return
-
 
 	if stamina < heavy_attack_stamina_cost:
-
-		print(
-			"SIN STAMINA PARA ATAQUE PESADO"
-		)
-
+		print("SIN STAMINA PARA ATAQUE PESADO")
 		return
 
-
+	_reset_combo_state()
 	is_charging_heavy = true
-
 	heavy_hold_time = 0.0
-
 	charged_attack_ready = false
-
-
-	player_animated.self_modulate = Color(
-		1.0,
-		0.85,
-		0.55,
-		1.0
-	)
-
-
-# =========================================================
-# SOLTAR PESADO / CARGADO
-# =========================================================
+	player_animated.self_modulate = Color(1.0, 0.85, 0.55, 1.0)
 
 func _release_heavy_attack() -> void:
 
@@ -1457,27 +1475,26 @@ func _clear_heavy_charge() -> void:
 # =========================================================
 
 func _try_normal_attack() -> void:
-
 	if is_dead:
-
 		return
-
-
 	if is_dashing:
-
 		return
-
-
 	if is_charging_heavy:
-
 		return
-
 
 	if attack_action_time_left > 0.0:
-
+		if (
+			combos_enabled
+			and combo_step == 1
+			and combo_queued_action == &""
+			and attack_action_time_left <= combo_input_window
+		):
+			combo_queued_action = &"normal_2"
+			print("COMBO: SEGUNDO PRINCIPAL EN COLA")
 		return
 
-
+	_reset_combo_state()
+	combo_step = 1 if combos_enabled else 0
 	_start_attack(
 		"normal",
 		attack_damage,
@@ -1492,17 +1509,7 @@ func _try_normal_attack() -> void:
 		attack_knockback_force,
 		attack_hitstop_duration
 	)
-
-
-	print(
-		"ATAQUE NORMAL | Daño: ",
-		attack_damage
-	)
-
-
-# =========================================================
-# COMENZAR CUALQUIER ATAQUE
-# =========================================================
+	print("ATAQUE NORMAL | Daño: ", attack_damage)
 
 func _start_attack(
 	attack_name: String,
@@ -1736,43 +1743,79 @@ func _disable_attack_hitbox() -> void:
 # =========================================================
 
 func _finish_attack() -> void:
-
+	var queued_action := combo_queued_action
 	_disable_attack_hitbox()
-
-
 	attack_action_time_left = 0.0
-
 	attack_hit_delay_left = 0.0
-
-
 	current_attack_name = ""
-
 	current_attack_damage = 0
-
 	current_attack_distance = 0.0
-
 	current_attack_hit_duration = 0.0
-
 	current_attack_max_targets = 1
-
 	current_attack_knockback_force = 0.0
-
 	current_attack_hitstop_duration = 0.0
-
-
 	current_attack_area = null
-
 	current_attack_collision = null
-
 	current_attack_debug = null
-
-
 	attack_has_resolved = false
+	combo_queued_action = &""
+
+	if combos_enabled and queued_action != &"":
+		if _start_combo_followup(queued_action):
+			return
+
+	_reset_combo_state()
 
 
-# =========================================================
-# POSICIONAR HITBOX
-# =========================================================
+func _start_combo_followup(action: StringName) -> bool:
+	match action:
+		&"normal_2":
+			combo_step = 2
+			_start_attack(
+				"combo_normal_2",
+				maxi(roundi(float(attack_damage) * combo_second_primary_damage_multiplier), 1),
+				attack_distance,
+				0.0,
+				attack_duration,
+				maxf(attack_cooldown * combo_second_primary_duration_multiplier, attack_duration),
+				normal_attack_area,
+				normal_attack_collision,
+				normal_attack_debug,
+				1,
+				attack_knockback_force * combo_second_primary_knockback_multiplier,
+				attack_hitstop_duration
+			)
+			print("COMBO 2/3 | PRINCIPAL")
+			return true
+
+		&"heavy_finisher":
+			if not _spend_stamina(combo_finisher_stamina_cost):
+				print("COMBO CORTADO | SIN STAMINA PARA REMATE")
+				return false
+			combo_step = 3
+			_start_attack(
+				"combo_finisher",
+				maxi(roundi(float(heavy_attack_damage) * combo_finisher_damage_multiplier), 1),
+				heavy_attack_distance,
+				heavy_attack_windup * 0.65,
+				heavy_attack_hit_duration,
+				maxf(heavy_attack_total_duration * combo_finisher_duration_multiplier, heavy_attack_hit_duration + 0.05),
+				heavy_attack_area,
+				heavy_attack_collision,
+				heavy_attack_debug,
+				heavy_attack_max_targets,
+				heavy_attack_knockback_force * combo_finisher_knockback_multiplier,
+				heavy_attack_hitstop_duration
+			)
+			print("COMBO 3/3 | REMATE PESADO | Stamina: ", stamina)
+			return true
+
+	return false
+
+
+func _reset_combo_state() -> void:
+	combo_step = 0
+	combo_queued_action = &""
 
 func _update_current_attack_area() -> void:
 
@@ -2996,6 +3039,9 @@ func _die() -> void:
 	if is_charging_heavy:
 
 		_clear_heavy_charge()
+
+
+	_reset_combo_state()
 
 
 	print(

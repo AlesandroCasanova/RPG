@@ -1,0 +1,38 @@
+IA DE COMBATE AVANZADA V3
+===========================
+
+REEMPLAZAR:
+- res://scripts/enemies/base/enemy.gd
+- res://scripts/enemies/base/enemy_data.gd
+- res://scripts/enemies/ai/enemy_ai_profile.gd
+- res://scripts/enemies/ai/enemy_utility_brain.gd
+- res://scripts/enemies/ai/enemy_squad_coordinator.gd
+- res://scripts/enemies/ai/enemy_combat_memory.gd
+- res://scripts/enemies/ai/enemy_combat_movement.gd
+- res://scripts/player/player.gd
+
+AGREGAR:
+- res://scripts/enemies/ai/enemy_combat_tactics.gd
+
+NOVEDADES:
+1. Dodge predictivo basado en una zona de amenaza observable.
+2. Predicción de trayectoria para preparar y orientar ataques.
+3. Posturas internas: neutral, agresiva, defensiva, presión y castigo.
+4. Personalidades: equilibrado, agresivo, cauteloso, oportunista,
+   duelista, berserker, cazador de manada y defensivo.
+5. Coordinación grupal con tokens y separación temporal de ataques.
+6. Combos de enemigos según IQ, personalidad, stamina y resultado del golpe.
+7. Combo inicial del Player:
+      ataque principal -> ataque principal -> ataque secundario
+   El remate pesado tiene knockback aumentado para poder generar stagger.
+
+PRUEBA RECOMENDADA:
+- Primero 1 enemigo con IQ 100 y capacidades en AUTO/ENABLED.
+- Después 3 enemigos del mismo squad para observar rotación y stagger de ataques.
+- Activar debug_combat para ver postura, peligro estimado y paso del combo.
+
+NOTA:
+Los scripts fueron revisados estáticamente, pero este entorno no dispone
+del ejecutable de Godot para correr el proyecto. Si Godot marca un error,
+no cambies varias cosas a la vez: enviá la primera línea roja y se corrige
+sobre esta misma versión.
