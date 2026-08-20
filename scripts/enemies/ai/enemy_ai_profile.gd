@@ -36,6 +36,7 @@ const CAP_INTERRUPT: StringName = &"interrupt"
 const CAP_CHARGED_ATTACK: StringName = &"charged_attack"
 const CAP_PREDICT: StringName = &"predict"
 const CAP_COMBO: StringName = &"combo"
+const CAP_LEADERSHIP: StringName = &"leadership"
 
 
 @export_category("Inteligencia")
@@ -86,6 +87,7 @@ var deterministic_seed: int = 0
 @export var charged_attack_mode: CapabilityMode = CapabilityMode.AUTO
 @export var predict_mode: CapabilityMode = CapabilityMode.AUTO
 @export var combo_mode: CapabilityMode = CapabilityMode.AUTO
+@export var leadership_mode: CapabilityMode = CapabilityMode.AUTO
 
 
 @export_category("Reaccion e incertidumbre")
@@ -233,6 +235,55 @@ var patience: float = 0.8
 
 @export_range(0.0, 1.0, 0.05)
 var retreat_health_ratio: float = 0.25
+
+
+@export_category("Huida real")
+
+## Distancia base que intenta ganar cada vez que recalcula una ruta de huida.
+@export_range(80.0, 1200.0, 10.0)
+var flee_escape_distance: float = 360.0
+
+## Distancia respecto de la última amenaza conocida necesaria para empezar a
+## considerar que logró escapar.
+@export_range(80.0, 1200.0, 10.0)
+var flee_safe_distance: float = 300.0
+
+## Tiempo que debe permanecer sin línea de visión y a distancia segura antes de
+## abandonar realmente el combate.
+@export_range(0.2, 10.0, 0.1)
+var flee_safe_duration: float = 1.6
+
+## Cada cuánto recalcula destino una IA muy básica durante una huida.
+@export_range(0.10, 3.0, 0.05)
+var flee_repath_interval_at_zero: float = 0.95
+
+## Cada cuánto recalcula destino una IA maestra durante una huida.
+@export_range(0.10, 3.0, 0.05)
+var flee_repath_interval_at_hundred: float = 0.28
+
+## Distancia mínima restante para gastar un dash específicamente al escapar.
+@export_range(20.0, 600.0, 5.0)
+var flee_dash_min_distance: float = 115.0
+
+## Radio dentro del cual puede considerar reunirse con aliados si eso lo aleja
+## del peligro.
+@export_range(0.0, 1600.0, 10.0)
+var flee_rally_radius: float = 480.0
+
+## Radio del grito/aviso al iniciar una huida.
+@export_range(0.0, 1200.0, 10.0)
+var flee_help_radius: float = 300.0
+
+## Permite que un enemigo que huye alerte a compañeros cercanos.
+@export var flee_can_call_for_help: bool = true
+
+## Peso extra de un destino que rompe línea de visión con el atacante.
+@export_range(0.0, 3.0, 0.05)
+var flee_los_break_bonus: float = 0.85
+
+## Peso base de la acción FLEE. Normalmente no hace falta tocarlo.
+@export_range(0.0, 5.0, 0.05)
+var flee_utility: float = 1.35
 
 
 @export_category("Memoria adaptativa")
@@ -425,6 +476,35 @@ var predictive_dodge_step_distance: float = 105.0
 var predictive_dodge_safety_padding: float = 18.0
 
 
+@export_category("Defensa inteligente")
+
+## Peligro mínimo para que una IA básica considere una reacción defensiva.
+@export_range(0.0, 1.0, 0.01)
+var defense_danger_threshold_at_zero: float = 0.62
+
+## Una IA maestra reacciona antes a una amenaza que realmente puede alcanzarla.
+@export_range(0.0, 1.0, 0.01)
+var defense_danger_threshold_at_hundred: float = 0.20
+
+## Si existe un interrupt válido, esta preferencia compite contra esquivar.
+@export_range(0.0, 2.0, 0.05)
+var interrupt_preference: float = 1.0
+
+## Peligro por encima del cual una IA inteligente prioriza salir del área antes
+## que continuar preparando un ataque.
+@export_range(0.0, 1.0, 0.01)
+var emergency_dodge_threshold: float = 0.72
+
+## Si ninguna salida lateral es segura, cuánto aumenta el valor de retroceder.
+@export_range(0.0, 2.0, 0.05)
+var blocked_evasion_retreat_bonus: float = 0.55
+
+## Distancia extra usada para valorar si una ruta de esquiva realmente despeja
+## la amenaza estimada.
+@export_range(0.0, 100.0, 1.0)
+var defense_clearance_padding: float = 12.0
+
+
 @export_category("Posturas de combate")
 
 ## Tiempo minimo que conserva una postura antes de cambiar por una razon menor.
@@ -444,6 +524,40 @@ var team_attack_stagger: float = 0.18
 ## Margen de seguridad del token de ataque por si una accion queda interrumpida.
 @export_range(0.1, 5.0, 0.05)
 var attack_token_grace: float = 0.75
+
+## Radio máximo en el que un líder puede mejorar la ejecución de órdenes.
+## No desbloquea capacidades que el subordinado no tenga.
+@export_range(0.0, 2000.0, 10.0)
+var leadership_command_radius: float = 520.0
+
+## Bonificación máxima de coordinación otorgada por un líder cercano.
+@export_range(0.0, 0.5, 0.01)
+var leadership_coordination_bonus: float = 0.18
+
+## Ruido espacial aplicado a miembros que todavía no entienden bien formaciones.
+@export_range(0.0, 120.0, 1.0)
+var low_iq_formation_error: float = 42.0
+
+
+@export_category("Rendimiento IA")
+
+## Frecuencia de muestreo sensorial para una IA básica. El cerebro sigue
+## actualizando movimiento cada physics frame; esto solo limita raycasts/sentidos.
+@export_range(0.02, 0.5, 0.01)
+var sense_poll_interval_at_zero: float = 0.16
+
+## Frecuencia de muestreo sensorial para una IA maestra.
+@export_range(0.02, 0.5, 0.01)
+var sense_poll_interval_at_hundred: float = 0.055
+
+## Multiplica el polling cuando el objetivo está lejos y el enemigo aún no está
+## consciente, reduciendo costo en encuentros grandes.
+@export_range(1.0, 5.0, 0.1)
+var unaware_far_poll_multiplier: float = 2.2
+
+## Intervalo del texto de debug; evita reconstruir strings a 60 FPS.
+@export_range(0.02, 1.0, 0.01)
+var debug_label_update_interval: float = 0.10
 
 
 @export_category("Combos de IA")
@@ -538,37 +652,78 @@ func get_combo_probability() -> float:
 	return clampf(result, 0.0, 0.95)
 
 
+func get_combat_personality_label() -> String:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			return "Agresivo"
+		CombatPersonality.CAUTIOUS:
+			return "Cauteloso"
+		CombatPersonality.OPPORTUNIST:
+			return "Oportunista"
+		CombatPersonality.DUELIST:
+			return "Duelista"
+		CombatPersonality.BERSERKER:
+			return "Berserker"
+		CombatPersonality.PACK_HUNTER:
+			return "Cazador de manada"
+		CombatPersonality.DEFENSIVE:
+			return "Defensivo"
+	return "Equilibrado"
+
+
 func get_personality_action_multiplier(action: StringName) -> float:
 	match combat_personality:
 		CombatPersonality.AGGRESSIVE:
 			match action:
-				&"attack": return 1.22
-				&"approach": return 1.18
-				&"retreat", &"cover": return 0.72
+				&"attack": return 1.32
+				&"approach": return 1.24
+				&"interrupt": return 1.16
+				&"hold", &"circle": return 0.78
+				&"retreat", &"cover": return 0.62
+				&"flee": return 0.58
 		CombatPersonality.CAUTIOUS:
 			match action:
-				&"dodge", &"circle", &"hold", &"cover": return 1.18
-				&"attack": return 0.88
+				&"dodge": return 1.34
+				&"circle", &"hold", &"cover": return 1.24
+				&"retreat": return 1.18
+				&"attack": return 0.78
+				&"approach": return 0.82
+				&"flee": return 1.32
 		CombatPersonality.OPPORTUNIST:
 			match action:
-				&"attack", &"interrupt": return 1.18
-				&"hold", &"circle": return 1.08
+				&"attack", &"interrupt": return 1.28
+				&"hold", &"circle": return 1.16
+				&"approach": return 0.88
 		CombatPersonality.DUELIST:
 			match action:
-				&"circle", &"dodge", &"attack": return 1.14
-				&"cover": return 0.72
+				&"circle": return 1.26
+				&"dodge": return 1.22
+				&"attack": return 1.18
+				&"hold": return 1.12
+				&"cover": return 0.58
+				&"flee": return 0.72
 		CombatPersonality.BERSERKER:
 			match action:
-				&"attack", &"approach": return 1.35
-				&"retreat", &"cover", &"hold": return 0.48
+				&"attack": return 1.48
+				&"approach": return 1.38
+				&"interrupt": return 1.12
+				&"dodge": return 0.54
+				&"retreat", &"cover", &"hold": return 0.36
+				&"flee":
+					return 0.78 if flee_mode == CapabilityMode.ENABLED else 0.0
 		CombatPersonality.PACK_HUNTER:
 			match action:
-				&"flank": return 1.34
-				&"circle", &"hold": return 1.12
+				&"flank": return 1.48
+				&"circle": return 1.28
+				&"hold": return 1.18
+				&"attack": return 1.10
 		CombatPersonality.DEFENSIVE:
 			match action:
-				&"dodge", &"retreat", &"cover", &"hold": return 1.28
-				&"attack", &"approach": return 0.78
+				&"dodge": return 1.42
+				&"retreat", &"cover", &"hold": return 1.36
+				&"circle": return 1.22
+				&"attack", &"approach": return 0.68
+				&"flee": return 1.28
 	return 1.0
 
 
@@ -616,6 +771,120 @@ func get_personality_stance_multiplier(stance: StringName) -> float:
 		CombatPersonality.DEFENSIVE:
 			return 1.38 if stance == &"defensive" else (0.74 if stance == &"aggressive" else 1.0)
 	return 1.0
+
+
+func get_personality_preferred_distance_multiplier() -> float:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			return 0.86
+		CombatPersonality.CAUTIOUS:
+			return 1.22
+		CombatPersonality.OPPORTUNIST:
+			return 1.08
+		CombatPersonality.DUELIST:
+			return 1.04
+		CombatPersonality.BERSERKER:
+			return 0.76
+		CombatPersonality.PACK_HUNTER:
+			return 1.10
+		CombatPersonality.DEFENSIVE:
+			return 1.28
+	return 1.0
+
+
+func get_preferred_distance() -> float:
+	return maxf(
+		preferred_distance * get_personality_preferred_distance_multiplier(),
+		10.0
+	)
+
+
+func get_personality_stamina_reserve_multiplier() -> float:
+	match combat_personality:
+		CombatPersonality.AGGRESSIVE:
+			return 0.72
+		CombatPersonality.CAUTIOUS:
+			return 1.28
+		CombatPersonality.OPPORTUNIST:
+			return 1.08
+		CombatPersonality.DUELIST:
+			return 1.12
+		CombatPersonality.BERSERKER:
+			return 0.42
+		CombatPersonality.PACK_HUNTER:
+			return 0.92
+		CombatPersonality.DEFENSIVE:
+			return 1.34
+	return 1.0
+
+
+func get_defense_danger_threshold() -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	return clampf(
+		lerpf(defense_danger_threshold_at_zero, defense_danger_threshold_at_hundred, skill),
+		0.0,
+		1.0
+	)
+
+
+func get_interrupt_preference() -> float:
+	if not is_capability_enabled(CAP_INTERRUPT):
+		return 0.0
+	var value := interrupt_preference * lerpf(0.55, 1.18, get_intelligence_ratio())
+	match combat_personality:
+		CombatPersonality.OPPORTUNIST, CombatPersonality.DUELIST:
+			value *= 1.18
+		CombatPersonality.CAUTIOUS, CombatPersonality.DEFENSIVE:
+			value *= 0.88
+		CombatPersonality.BERSERKER:
+			value *= 1.10
+	return maxf(value, 0.0)
+
+
+func get_group_coordination_quality() -> float:
+	if not is_capability_enabled(CAP_TEAMWORK):
+		return 0.0
+	var skill := pow(get_intelligence_ratio(), 0.90)
+	var quality := lerpf(0.24, 1.0, skill)
+	quality *= clampf(teamwork / 1.15, 0.35, 1.35)
+	return clampf(quality, 0.0, 1.0)
+
+
+func get_formation_error() -> float:
+	var quality := get_group_coordination_quality()
+	return maxf(low_iq_formation_error * (1.0 - quality), 0.0)
+
+
+func get_leadership_bonus() -> float:
+	if not is_capability_enabled(CAP_LEADERSHIP):
+		return 0.0
+	return clampf(
+		leadership_coordination_bonus * lerpf(0.70, 1.0, get_intelligence_ratio()),
+		0.0,
+		0.5
+	)
+
+
+func get_sense_poll_interval(distance_to_target: float = 0.0, aware: bool = true) -> float:
+	var skill := pow(get_intelligence_ratio(), 0.82)
+	var result := lerpf(
+		sense_poll_interval_at_zero,
+		sense_poll_interval_at_hundred,
+		skill
+	)
+	if not aware and distance_to_target > vision_range * 0.70:
+		result *= unaware_far_poll_multiplier
+	return maxf(result, 0.02)
+
+
+func get_debug_label_update_interval() -> float:
+	return maxf(debug_label_update_interval, 0.02)
+
+
+func get_adaptive_confidence_cap() -> float:
+	# Incluso con mucha evidencia, una IA media no convierte una tendencia en una
+	# certeza absoluta. Esto evita adaptación "omnisciente".
+	return clampf(lerpf(0.48, 0.98, get_intelligence_ratio()), 0.0, 1.0)
 
 
 func get_tactical_anchor_lock_time() -> float:
@@ -910,7 +1179,17 @@ func get_low_health_flee_willingness() -> float:
 		clampf(courage / 2.0, 0.0, 1.0)
 	)
 
-	return clampf(base * courage_factor, 0.0, 1.0)
+	var result := clampf(base * courage_factor, 0.0, 1.0)
+
+	# ENABLED es un override real: aunque la personalidad normalmente no huya
+	# (por ejemplo Berserker), el diseñador puede forzar este comportamiento.
+	if flee_mode == CapabilityMode.ENABLED:
+		result = maxf(result, 0.62)
+
+	if flee_mode == CapabilityMode.DISABLED:
+		return 0.0
+
+	return result
 
 
 func can_flee_from_low_health() -> bool:
@@ -960,6 +1239,61 @@ func get_low_health_flee_label() -> String:
 	return "AUTO"
 
 
+func get_flee_escape_distance() -> float:
+	# Una IA experta elige rutas de escape un poco más largas y deliberadas.
+	return maxf(
+		flee_escape_distance * lerpf(0.82, 1.18, get_low_health_flee_quality()),
+		80.0
+	)
+
+
+func get_flee_safe_distance() -> float:
+	return maxf(
+		flee_safe_distance * lerpf(0.82, 1.10, get_low_health_flee_quality()),
+		80.0
+	)
+
+
+func get_flee_safe_duration() -> float:
+	# El inteligente no vuelve a "calma" apenas deja de ver al jugador.
+	return maxf(
+		flee_safe_duration * lerpf(0.72, 1.18, get_low_health_flee_quality()),
+		0.20
+	)
+
+
+func get_flee_repath_interval() -> float:
+	return maxf(
+		lerpf(
+			flee_repath_interval_at_zero,
+			flee_repath_interval_at_hundred,
+			get_low_health_flee_quality()
+		),
+		0.10
+	)
+
+
+func get_flee_dash_min_distance() -> float:
+	return maxf(
+		flee_dash_min_distance * lerpf(1.16, 0.82, get_low_health_flee_quality()),
+		20.0
+	)
+
+
+func get_flee_rally_radius() -> float:
+	return maxf(
+		flee_rally_radius * lerpf(0.70, 1.15, get_low_health_flee_quality()),
+		0.0
+	)
+
+
+func get_flee_help_radius() -> float:
+	return maxf(
+		flee_help_radius * lerpf(0.72, 1.12, get_low_health_flee_quality()),
+		0.0
+	)
+
+
 func get_action_utility(action: StringName) -> float:
 	# Los pesos base siguen siendo editables en avanzado, pero el IQ cambia
 	# cuanto sabe aprovechar cada herramienta. En particular APPROACH pierde
@@ -976,6 +1310,8 @@ func get_action_utility(action: StringName) -> float:
 			return hold_utility * lerpf(0.72, 1.08, skill)
 		&"retreat":
 			return retreat_utility * lerpf(0.88, 1.06, skill)
+		&"flee":
+			return flee_utility * lerpf(0.86, 1.12, skill)
 		&"search":
 			return search_utility * lerpf(0.72, 1.18, skill)
 		&"circle":
@@ -1043,7 +1379,9 @@ func get_reposition_dash_min_distance() -> float:
 
 func get_dash_stamina_reserve_ratio() -> float:
 	return clampf(
-		dash_stamina_reserve_ratio * lerpf(0.35, 1.10, get_intelligence_ratio()),
+		dash_stamina_reserve_ratio
+		* lerpf(0.35, 1.10, get_intelligence_ratio())
+		* get_personality_stamina_reserve_multiplier(),
 		0.0,
 		1.0
 	)
@@ -1053,7 +1391,7 @@ func get_team_attack_stagger() -> float:
 	if not is_capability_enabled(CAP_TEAMWORK):
 		return 0.0
 	return maxf(
-		team_attack_stagger * lerpf(0.60, 1.20, get_intelligence_ratio()),
+		team_attack_stagger * lerpf(0.45, 1.25, get_group_coordination_quality()),
 		0.0
 	)
 
@@ -1163,6 +1501,7 @@ func _get_capability_threshold(capability: StringName) -> float:
 		CAP_CHARGED_ATTACK: return 75.0
 		CAP_PREDICT: return 80.0
 		CAP_COMBO: return 65.0
+		CAP_LEADERSHIP: return 90.0
 	return 101.0
 
 
@@ -1183,6 +1522,7 @@ func _get_capability_mode(capability: StringName) -> CapabilityMode:
 		CAP_CHARGED_ATTACK: return charged_attack_mode
 		CAP_PREDICT: return predict_mode
 		CAP_COMBO: return combo_mode
+		CAP_LEADERSHIP: return leadership_mode
 	return CapabilityMode.DISABLED
 
 
@@ -1237,11 +1577,32 @@ const _ADVANCED_INSPECTOR_PROPERTIES: Array[StringName] = [
 	&"dodge_utility",
 	&"flank_radius",
 	&"flank_utility",
+	&"blocked_evasion_retreat_bonus",
+	&"defense_clearance_padding",
+	&"defense_danger_threshold_at_hundred",
+	&"defense_danger_threshold_at_zero",
+	&"debug_label_update_interval",
+	&"emergency_dodge_threshold",
+	&"flee_can_call_for_help",
+	&"flee_dash_min_distance",
+	&"flee_escape_distance",
+	&"flee_help_radius",
+	&"flee_los_break_bonus",
+	&"flee_rally_radius",
+	&"flee_repath_interval_at_hundred",
+	&"flee_repath_interval_at_zero",
+	&"flee_safe_distance",
+	&"flee_safe_duration",
+	&"flee_utility",
 	&"hearing_range",
 	&"hearing_velocity_threshold",
 	&"heavy_threat_length_multiplier",
 	&"hold_utility",
+	&"interrupt_preference",
 	&"interrupt_utility",
+	&"leadership_command_radius",
+	&"leadership_coordination_bonus",
+	&"low_iq_formation_error",
 	&"maximum_commitment",
 	&"maximum_predictive_lead",
 	&"memory_duration",
@@ -1285,6 +1646,8 @@ const _ADVANCED_INSPECTOR_PROPERTIES: Array[StringName] = [
 	&"search_retarget_interval_at_hundred",
 	&"search_retarget_interval_at_zero",
 	&"search_utility",
+	&"sense_poll_interval_at_hundred",
+	&"sense_poll_interval_at_zero",
 	&"sight_collision_mask",
 	&"stance_lock_at_hundred",
 	&"stance_lock_at_zero",
@@ -1297,6 +1660,7 @@ const _ADVANCED_INSPECTOR_PROPERTIES: Array[StringName] = [
 	&"team_attack_stagger",
 	&"teamwork",
 	&"vision_angle_degrees",
+	&"unaware_far_poll_multiplier",
 	&"vision_range"
 ]
 
@@ -1307,13 +1671,16 @@ const _ADVANCED_INSPECTOR_CATEGORIES: Array[StringName] = [
 	&"Percepcion",
 	&"Sospecha y busqueda",
 	&"Ritmo de decision",
+	&"Huida real",
 	&"Memoria adaptativa",
 	&"Posicionamiento tactico",
 	&"Esquiva y desplazamiento",
 	&"Movimiento tactico",
 	&"Lectura espacial y prediccion",
+	&"Defensa inteligente",
 	&"Posturas de combate",
 	&"Coordinacion avanzada",
+	&"Rendimiento IA",
 	&"Combos de IA",
 	&"Pesos de utilidad"
 ]
@@ -1335,7 +1702,8 @@ func get_auto_profile_summary() -> String:
 	for capability: StringName in [
 		CAP_SEARCH, CAP_HEAVY_ATTACK, CAP_TEAMWORK, CAP_FLANK, CAP_CIRCLE,
 		CAP_COVER, CAP_ADAPT_ATTACKS, CAP_READ_TELEGRAPHS, CAP_DODGE,
-		CAP_DASH, CAP_INTERRUPT, CAP_CHARGED_ATTACK, CAP_PREDICT, CAP_COMBO
+		CAP_DASH, CAP_INTERRUPT, CAP_CHARGED_ATTACK, CAP_PREDICT, CAP_COMBO,
+		CAP_LEADERSHIP
 	]:
 		if is_capability_enabled(capability):
 			enabled.append(String(capability))

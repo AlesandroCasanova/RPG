@@ -23,38 +23,81 @@ func get_assignment(
 	var result := {
 		"role": &"waiting",
 		"position": target_position,
-		"can_attack": false
+		"can_attack": false,
+		"coordination_quality": 0.0
 	}
 	var squad := _filter_squad(enemies, subject, subject_data)
-	# Cada miembro ordena la misma lista usando la percepción propia de cada
-	# candidato. Así una escuadra mixta conserva roles consistentes aunque sus
-	# miembros tengan distinto error posicional sobre el objetivo.
 	var ranked := _get_cached_ranking(squad)
 	var my_index := ranked.find(subject)
 	if my_index < 0:
 		return result
+
+	var base_quality := subject_profile.get_group_coordination_quality()
+	var leader_bonus := _get_leader_bonus(squad, subject, subject_profile)
+	var coordination_quality := clampf(base_quality + leader_bonus, 0.0, 1.0)
+	result["coordination_quality"] = coordination_quality
+
 	var pressure_count := mini(_get_attack_token_count(ranked), ranked.size())
 	var pressure_snapshot := get_pressure_snapshot(subject, subject_data)
 	result["group_attacking_count"] = int(pressure_snapshot.get("attacking", 0))
 	result["group_ready_count"] = ranked.size()
+
+	# Sin trabajo en equipo, el enemigo no recibe flancos/formaciones perfectas.
+	# Puede coincidir con un rol de presión por proximidad, pero su slot tiene
+	# error y no entiende rotaciones complejas.
+	if not subject_profile.is_capability_enabled(EnemyAIProfile.CAP_TEAMWORK):
+		var crude_pressure := my_index < pressure_count
+		result["role"] = &"pressure" if crude_pressure else &"waiting"
+		result["can_attack"] = crude_pressure
+		var crude_count := maxi(ranked.size(), 1)
+		var crude_position := _ring_position(
+			target_position,
+			subject_data.attack_slot_radius if crude_pressure else subject_profile.support_radius,
+			my_index,
+			crude_count,
+			0.0
+		)
+		result["position"] = _apply_formation_error(
+			crude_position,
+			target_position,
+			subject,
+			subject_profile.get_formation_error()
+		)
+		return result
+
 	if my_index < pressure_count:
 		result["role"] = &"pressure"
 		result["can_attack"] = true
-		result["position"] = _ring_position(
+		var pressure_position := _ring_position(
 			target_position,
 			subject_data.attack_slot_radius,
 			my_index,
 			maxi(pressure_count, 1),
 			0.0
 		)
+		result["position"] = _apply_formation_error(
+			pressure_position,
+			target_position,
+			subject,
+			subject_profile.get_formation_error() * 0.45
+		)
 		return result
+
+	var max_flankers := 0
+	if coordination_quality >= 0.38:
+		max_flankers = 1
+	if coordination_quality >= 0.72:
+		max_flankers = 2
+
 	var flankers: Array[Node] = []
-	for enemy: Node in ranked.slice(pressure_count):
-		var candidate_profile := enemy.get("ai_profile") as EnemyAIProfile
-		if candidate_profile != null and candidate_profile.is_capability_enabled(EnemyAIProfile.CAP_FLANK):
-			flankers.append(enemy)
-			if flankers.size() >= 2:
-				break
+	if max_flankers > 0:
+		for enemy: Node in ranked.slice(pressure_count):
+			var candidate_profile := enemy.get("ai_profile") as EnemyAIProfile
+			if candidate_profile != null and candidate_profile.is_capability_enabled(EnemyAIProfile.CAP_FLANK):
+				flankers.append(enemy)
+				if flankers.size() >= max_flankers:
+					break
+
 	var flank_index := flankers.find(subject)
 	if flank_index >= 0:
 		result["role"] = &"flank"
@@ -63,21 +106,30 @@ func get_assignment(
 			target_to_subject = Vector2.DOWN
 		var side := -1.0 if flank_index == 0 else 1.0
 		var flank_direction := target_to_subject.normalized().rotated(side * PI * 0.5)
-		result["position"] = target_position + flank_direction * subject_profile.flank_radius
+		var flank_position := target_position + flank_direction * subject_profile.flank_radius
+		result["position"] = _apply_formation_error(
+			flank_position,
+			target_position,
+			subject,
+			subject_profile.get_formation_error() * 0.35
+		)
 		return result
+
 	var waiting_index := maxi(my_index - pressure_count, 0)
 	var waiting_count := maxi(ranked.size() - pressure_count, 1)
-	result["role"] = (
-		&"support"
-		if subject_profile.is_capability_enabled(EnemyAIProfile.CAP_TEAMWORK)
-		else &"waiting"
-	)
-	result["position"] = _ring_position(
+	result["role"] = &"support" if coordination_quality >= 0.45 else &"waiting"
+	var support_position := _ring_position(
 		target_position,
 		subject_profile.support_radius,
 		waiting_index,
 		waiting_count,
 		PI / float(waiting_count)
+	)
+	result["position"] = _apply_formation_error(
+		support_position,
+		target_position,
+		subject,
+		subject_profile.get_formation_error()
 	)
 	return result
 
@@ -108,7 +160,14 @@ func request_attack_commit(
 	var component_key := _component_key(component, subject_data.squad_id)
 	var now := float(Time.get_ticks_msec()) / 1000.0
 	var last_start := float(_last_attack_start_by_component.get(component_key, -9999.0))
-	if active_count > 0 and now - last_start < subject_profile.get_team_attack_stagger():
+	var coordination_quality := clampf(
+		subject_profile.get_group_coordination_quality()
+		+ _get_leader_bonus(component, subject, subject_profile),
+		0.0,
+		1.0
+	)
+	var stagger := subject_profile.get_team_attack_stagger() * lerpf(0.45, 1.12, coordination_quality)
+	if active_count > 0 and now - last_start < stagger:
 		return false
 	_attack_tokens[subject_id] = {
 		"enemy": weakref(subject),
@@ -160,6 +219,48 @@ func get_pressure_snapshot(
 		"attacking": attacking,
 		"members": component.size()
 	}
+
+
+func _get_leader_bonus(
+	members: Array[Node],
+	subject: CharacterBody2D,
+	subject_profile: EnemyAIProfile
+) -> float:
+	if subject == null or subject_profile == null:
+		return 0.0
+	var best := 0.0
+	for member: Node in members:
+		if member == subject or not is_instance_valid(member) or not member is Node2D:
+			continue
+		var leader_profile := member.get("ai_profile") as EnemyAIProfile
+		if leader_profile == null or not leader_profile.is_capability_enabled(EnemyAIProfile.CAP_LEADERSHIP):
+			continue
+		if (member as Node2D).global_position.distance_to(subject.global_position) > leader_profile.leadership_command_radius:
+			continue
+		best = maxf(best, leader_profile.get_leadership_bonus())
+	return best
+
+
+func _apply_formation_error(
+	position: Vector2,
+	center: Vector2,
+	subject: CharacterBody2D,
+	error_radius: float
+) -> Vector2:
+	if subject == null or error_radius <= 0.0:
+		return position
+	# Error determinista por instancia/frame de asignación: evita jitter por frame.
+	var hash_value := int(subject.get_instance_id() * 1103515245 + 12345)
+	var angle := fmod(float(abs(hash_value % 10000)) / 10000.0 * TAU, TAU)
+	var magnitude := error_radius * (0.35 + float(abs(hash_value % 997)) / 997.0 * 0.65)
+	var candidate := position + Vector2.RIGHT.rotated(angle) * magnitude
+	# No deja que el error mande al enemigo exactamente al centro del objetivo.
+	if candidate.distance_to(center) < 18.0:
+		var away := candidate - center
+		if away.length_squared() < 0.001:
+			away = Vector2.DOWN
+		candidate = center + away.normalized() * 18.0
+	return candidate
 
 
 static func _cleanup_attack_tokens() -> void:

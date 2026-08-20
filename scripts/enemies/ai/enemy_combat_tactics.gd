@@ -248,17 +248,87 @@ func get_evasion_candidates(
 			float(threat.get("half_width", 0.0))
 		)
 		var lateral_value := absf(direction.dot(attack_direction.orthogonal()))
-		var score := (1.0 - danger_after) * 1.35 + lateral_value * 0.28
+		var retreat_value := clampf(direction.dot(-attack_direction), 0.0, 1.0)
+		var score := (1.0 - danger_after) * 1.55
+		score += lateral_value * 0.34
+		score += retreat_value * 0.12
 		result.append({
 			"direction": direction,
 			"destination": destination,
 			"danger_after": danger_after,
+			"clearance": 1.0 - danger_after,
 			"score": score
 		})
 
 	result.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
 			return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	return result
+
+
+func evaluate_defense(
+	observed: Dictionary,
+	threat: Dictionary,
+	safe_evasion_exists: bool,
+	interrupt_reaches: bool,
+	interrupt_setup_viable: bool,
+	stamina_ratio: float,
+	dash_ready: bool
+) -> Dictionary:
+	var result := {
+		"response": &"none",
+		"urgency": 0.0
+	}
+
+	if profile == null or not bool(threat.get("active", false)):
+		return result
+
+	var danger := clampf(float(threat.get("danger", 0.0)), 0.0, 1.0)
+	var threshold := profile.get_defense_danger_threshold()
+	var phase := StringName(observed.get("phase", &"none"))
+	var action := StringName(observed.get("action", &"none"))
+	var charge_stage := StringName(observed.get("charge_stage", &"none"))
+	var urgency := clampf(
+		(danger - threshold) / maxf(1.0 - threshold, 0.05),
+		0.0,
+		1.0
+	)
+
+	# INTERRUPT puede ser proactivo: cortar una carga observable aunque todavía
+	# no estemos dentro de la zona peligrosa del golpe.
+	var interrupt_window := (
+		(interrupt_reaches or interrupt_setup_viable)
+		and profile.is_capability_enabled(EnemyAIProfile.CAP_INTERRUPT)
+		and phase == &"telegraph"
+		and action in [&"attack", &"charge"]
+	)
+	if interrupt_window:
+		var interrupt_value := profile.get_interrupt_preference()
+		if not interrupt_reaches:
+			interrupt_value *= 0.90
+		if charge_stage == &"ready" or action == &"charge":
+			interrupt_value *= 1.22
+		if interrupt_value >= 1.02:
+			result["response"] = &"interrupt"
+			result["urgency"] = maxf(urgency, 0.45)
+			return result
+
+	if danger < threshold:
+		return result
+
+	if safe_evasion_exists and profile.is_capability_enabled(EnemyAIProfile.CAP_DODGE):
+		result["response"] = &"dodge"
+		result["urgency"] = urgency * (1.12 if dash_ready and stamina_ratio > 0.20 else 1.0)
+		return result
+
+	# Sin salida lateral segura, retroceder/crear espacio es preferible a intentar
+	# un dodge condenado contra una pared.
+	result["response"] = &"retreat"
+	result["urgency"] = clampf(
+		urgency + profile.blocked_evasion_retreat_bonus * 0.25,
+		0.0,
+		1.0
 	)
 	return result
 

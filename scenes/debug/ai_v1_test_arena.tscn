@@ -1,0 +1,226 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="PackedScene" path="res://world.tscn" id="1_world"]
+[ext_resource type="PackedScene" path="res://scenes/tutorial/frontier_environment.tscn" id="2_environment"]
+[ext_resource type="Script" path="res://scripts/debug/ai_v1_test_arena.gd" id="3_controller"]
+[ext_resource type="Script" path="res://scripts/enemies/ai/enemy_cover_point.gd" id="4_cover"]
+
+[sub_resource type="RectangleShape2D" id="WallShapeA"]
+size = Vector2(80, 80)
+
+[sub_resource type="RectangleShape2D" id="WallShapeB"]
+size = Vector2(80, 80)
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+bg_color = Color(0.025, 0.022, 0.018, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.38, 0.31, 0.22, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="NotesStyle"]
+bg_color = Color(0.07, 0.06, 0.05, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.23, 0.18, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="AIV1TestArena" type="Node2D"]
+script = ExtResource("3_controller")
+
+[node name="World" parent="." instance=ExtResource("1_world")]
+
+[node name="Player" parent="World/Environment" index="0"]
+position = Vector2(1700, 780)
+
+[node name="ArenaEnvironment" parent="World/Environment" index="1" instance=ExtResource("2_environment")]
+
+[node name="TestActors" type="Node2D" parent="World/Environment"]
+
+[node name="TestGeometry" type="Node2D" parent="World/Environment"]
+
+[node name="WallA" type="StaticBody2D" parent="World/Environment/TestGeometry"]
+position = Vector2(1850, 780)
+collision_layer = 0
+collision_mask = 0
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Environment/TestGeometry/WallA"]
+shape = SubResource("WallShapeA")
+
+[node name="Polygon2D" type="Polygon2D" parent="World/Environment/TestGeometry/WallA"]
+polygon = PackedVector2Array(-40, -40, 40, -40, 40, 40, -40, 40)
+color = Color(0.35, 0.24, 0.14, 0.92)
+
+[node name="NavigationObstacle2D" type="NavigationObstacle2D" parent="World/Environment/TestGeometry/WallA"]
+avoidance_enabled = false
+avoidance_layers = 1
+vertices = PackedVector2Array(-40, -40, -40, 40, 40, 40, 40, -40)
+
+[node name="WallB" type="StaticBody2D" parent="World/Environment/TestGeometry"]
+position = Vector2(1980, 870)
+collision_layer = 0
+collision_mask = 0
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Environment/TestGeometry/WallB"]
+shape = SubResource("WallShapeB")
+
+[node name="Polygon2D" type="Polygon2D" parent="World/Environment/TestGeometry/WallB"]
+polygon = PackedVector2Array(-40, -40, 40, -40, 40, 40, -40, 40)
+color = Color(0.35, 0.24, 0.14, 0.92)
+
+[node name="NavigationObstacle2D" type="NavigationObstacle2D" parent="World/Environment/TestGeometry/WallB"]
+avoidance_enabled = false
+avoidance_layers = 1
+vertices = PackedVector2Array(-40, -40, -40, 40, 40, 40, 40, -40)
+
+[node name="CoverNW" type="Marker2D" parent="World/Environment/TestGeometry"]
+position = Vector2(1910, 630)
+script = ExtResource("4_cover")
+cover_quality = 1.15
+designer_confirmed_cover = false
+
+[node name="CoverNE" type="Marker2D" parent="World/Environment/TestGeometry"]
+position = Vector2(2070, 670)
+script = ExtResource("4_cover")
+cover_quality = 1.1
+designer_confirmed_cover = false
+
+[node name="CoverSW" type="Marker2D" parent="World/Environment/TestGeometry"]
+position = Vector2(1900, 930)
+script = ExtResource("4_cover")
+cover_quality = 1.1
+designer_confirmed_cover = false
+
+[node name="CoverSE" type="Marker2D" parent="World/Environment/TestGeometry"]
+position = Vector2(2070, 920)
+script = ExtResource("4_cover")
+cover_quality = 1.2
+designer_confirmed_cover = false
+
+[node name="TestHUD" type="CanvasLayer" parent="."]
+layer = 100
+
+[node name="Panel" type="PanelContainer" parent="TestHUD"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -620.0
+offset_top = 18.0
+offset_right = -18.0
+offset_bottom = 510.0
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="Margin" type="MarginContainer" parent="TestHUD/Panel"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="TestHUD/Panel/Margin"]
+theme_override_constants/separation = 7
+
+[node name="Title" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(1, 0.86, 0.55, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.015, 0.01, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 20
+text = "TEST IA V1"
+
+[node name="Variant" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "Variante"
+
+[node name="Instructions" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(560, 125)
+theme_override_colors/font_color = Color(0.92, 0.9, 0.84, 1)
+theme_override_font_sizes/font_size = 14
+text = "Instrucciones"
+autowrap_mode = 2
+
+[node name="Status" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(0.72, 1, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "FPS"
+
+[node name="Separator1" type="HSeparator" parent="TestHUD/Panel/Margin/VBox"]
+
+[node name="NavButtons" type="HBoxContainer" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_constants/separation = 6
+
+[node name="Prev" type="Button" parent="TestHUD/Panel/Margin/VBox/NavButtons"]
+size_flags_horizontal = 3
+text = "← Test anterior"
+
+[node name="Reset" type="Button" parent="TestHUD/Panel/Margin/VBox/NavButtons"]
+size_flags_horizontal = 3
+text = "Reiniciar [R]"
+
+[node name="Next" type="Button" parent="TestHUD/Panel/Margin/VBox/NavButtons"]
+size_flags_horizontal = 3
+text = "Siguiente test →"
+
+[node name="ActionButtons" type="HBoxContainer" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_constants/separation = 6
+
+[node name="VariantButton" type="Button" parent="TestHUD/Panel/Margin/VBox/ActionButtons"]
+size_flags_horizontal = 3
+text = "Variante [V]"
+
+[node name="LowHP" type="Button" parent="TestHUD/Panel/Margin/VBox/ActionButtons"]
+size_flags_horizontal = 3
+text = "HP enemigo 10% [H]"
+
+[node name="Debug" type="Button" parent="TestHUD/Panel/Margin/VBox/ActionButtons"]
+size_flags_horizontal = 3
+text = "Debug: ON"
+
+[node name="Separator2" type="HSeparator" parent="TestHUD/Panel/Margin/VBox"]
+
+[node name="NotesLabel" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+text = "Nota rápida para este test:"
+
+[node name="Notes" type="LineEdit" parent="TestHUD/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 34)
+placeholder_text = "Ej: IQ100 esquiva contra la pared / FPS mínimo 74..."
+theme_override_styles/normal = SubResource("NotesStyle")
+
+[node name="ResultButtons" type="HBoxContainer" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_constants/separation = 6
+
+[node name="Pass" type="Button" parent="TestHUD/Panel/Margin/VBox/ResultButtons"]
+size_flags_horizontal = 3
+text = "✓ OK [K]"
+
+[node name="Fail" type="Button" parent="TestHUD/Panel/Margin/VBox/ResultButtons"]
+size_flags_horizontal = 3
+text = "✗ FALLA [J]"
+
+[node name="Copy" type="Button" parent="TestHUD/Panel/Margin/VBox/ResultButtons"]
+size_flags_horizontal = 3
+text = "Copiar reporte"
+
+[node name="Result" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 36)
+theme_override_colors/font_color = Color(1, 0.86, 0.62, 1)
+text = "Sin resultado registrado."
+autowrap_mode = 2
+
+[node name="ShortcutHelp" type="Label" parent="TestHUD/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(0.65, 0.64, 0.6, 1)
+theme_override_font_sizes/font_size = 11
+text = "WASD/mouse = gameplay · R reset · V variante · H HP bajo · K OK · J falla"
+
+[editable path="World"]

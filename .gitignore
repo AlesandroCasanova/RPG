@@ -1,3 +1,25 @@
-# Godot 4+ specific ignores
+# Godot 4
 .godot/
 /android/
+
+# Paquetes y backups temporales
+*.rar
+*.7z
+*.bak
+*.tmp
+*~
+
+# Paquetes temporales de desarrollo de IA
+/IA_COMBATE_V1_RC*/
+/IA_V1_RC*/
+/IA_COMBATE_V1_RC*.zip
+/IA_V1*.zip
+/IA_V5_5_huida_real.zip
+
+# Documentación temporal de pruebas IA
+/LEEME_IA_COMBATE_V1_RC*.txt
+/LEEME_ARENA_IA_V1.txt
+/LEEME_TEST_SOLO_4.txt
+/LEEME_V5_5.txt
+/PRUEBAS_IA_V1.txt
+/RETEST_RC2.txt

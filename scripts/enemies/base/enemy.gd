@@ -162,6 +162,7 @@ var debug_hitbox_reaches_player: bool = false
 var debug_distance_to_player: float = 0.0
 
 var debug_ai_label: Label = null
+var debug_ai_update_time_left: float = 0.0
 
 
 # =========================================================
@@ -189,10 +190,13 @@ var ai_action: StringName = &"hold"
 var ai_stance: StringName = &"neutral"
 
 var ai_observed_threat: Dictionary = {}
+var ai_defense_assessment: Dictionary = {"response": &"none", "urgency": 0.0}
+var ai_safe_evasion_exists: bool = false
 
 var ai_group_attacking_count: int = 0
 
 var ai_group_ready_count: int = 1
+var ai_coordination_quality: float = 0.0
 
 var ai_planned_attack: AttackData = null
 
@@ -225,6 +229,47 @@ var ai_attack_commitment_active: bool = false
 var ai_combo_step: int = 0
 
 var ai_combo_active: bool = false
+
+# =========================================================
+# HUIDA REAL
+# =========================================================
+
+var ai_flee_committed: bool = false
+var ai_flee_target_position: Vector2 = Vector2.ZERO
+var ai_flee_danger_position: Vector2 = Vector2.ZERO
+var ai_flee_repath_time_left: float = 0.0
+var ai_flee_safe_time: float = 0.0
+var ai_flee_help_called: bool = false
+
+# SEARCH watchdog: si un probe cae en geometría no alcanzable, se descarta.
+var ai_search_last_target_position: Vector2 = Vector2.ZERO
+var ai_search_last_sample_position: Vector2 = Vector2.ZERO
+var ai_search_progress_sample_left: float = 0.0
+var ai_search_stuck_time: float = 0.0
+
+# Desvío local de SEARCH.
+# El objetivo lógico del perímetro NO cambia mientras rodea el obstáculo.
+var ai_search_detour_active: bool = false
+var ai_search_detour_position: Vector2 = Vector2.ZERO
+var ai_search_detour_attempt: int = 0
+var ai_search_detour_side_sign: float = 1.0
+var ai_search_logical_target: Vector2 = Vector2.ZERO
+
+# Anticipación de obstáculos durante SEARCH.
+# El enemigo no espera a chocar: inspecciona el corredor por delante.
+var ai_search_obstacle_lookahead: float = 185.0
+var ai_search_body_clearance: float = 22.0
+var ai_search_detour_max_distance: float = 380.0
+var ai_search_failed_detour_position: Vector2 = Vector2.ZERO
+var ai_search_detour_speed_multiplier: float = 1.08
+
+# Bypass de terreno del perímetro.
+var ai_search_bypass_active: bool = false
+var ai_search_bypass_stage: int = 0
+var ai_search_bypass_waypoint: Vector2 = Vector2.ZERO
+var ai_search_bypass_rejoin_position: Vector2 = Vector2.ZERO
+var ai_search_bypass_rejoin_step: int = -1
+var ai_search_bypass_time: float = 0.0
 
 var current_attack_hit: bool = false
 
@@ -732,6 +777,7 @@ func _physics_process(
 	)
 
 	_update_ai_mobility_timers(delta)
+	debug_ai_update_time_left = maxf(debug_ai_update_time_left - delta, 0.0)
 
 	if combat_movement != null:
 		combat_movement.update(delta)
@@ -846,6 +892,20 @@ func _physics_process(
 	debug_distance_to_player = global_position.distance_to(
 		perception.get_estimated_target_position(false)
 	)
+
+
+	# Una huida real es un compromiso de supervivencia. Si durante la carrera
+	# deja de ver/recordar exactamente al Player, continúa hasta alcanzar una
+	# separación segura en vez de quedarse quieto de golpe.
+	if ai_flee_committed:
+		ai_action = &"flee"
+		_execute_flee_intention(delta)
+		_update_ai_debug_label()
+
+		if debug_combat:
+			queue_redraw()
+
+		return
 
 
 	# Una vez alcanzada, la cobertura es un compromiso espacial real. No se
@@ -1000,6 +1060,7 @@ func _update_tactical_assignment() -> void:
 	ai_can_attack = bool(assignment.get("can_attack", false))
 	ai_group_attacking_count = int(assignment.get("group_attacking_count", 0))
 	ai_group_ready_count = maxi(int(assignment.get("group_ready_count", 1)), 1)
+	ai_coordination_quality = clampf(float(assignment.get("coordination_quality", 0.0)), 0.0, 1.0)
 
 	var raw_target_position := Vector2(assignment.get("position", estimated_target))
 	ai_target_position = raw_target_position
@@ -1017,6 +1078,10 @@ func _update_tactical_assignment() -> void:
 	debug_can_attack = ai_can_attack
 
 func _reconsider_ai_action() -> void:
+	if ai_flee_committed:
+		ai_action = &"flee"
+		return
+
 	var reachable_attacks: Array[AttackData] = _get_reachable_attacks()
 	var available_attacks: Array[AttackData] = _get_available_attacks()
 	debug_hitbox_reaches_player = not reachable_attacks.is_empty()
@@ -1030,6 +1095,21 @@ func _reconsider_ai_action() -> void:
 		ai_observed_threat = combat_tactics.build_observed_threat(global_position, observed)
 	var threat_danger := clampf(float(ai_observed_threat.get("danger", 0.0)), 0.0, 1.0)
 
+	ai_safe_evasion_exists = _has_safe_evasion_candidate(ai_observed_threat)
+	ai_defense_assessment = {"response": &"none", "urgency": 0.0}
+	if combat_tactics != null and perception.has_confirmed_visual_contact:
+		ai_defense_assessment = combat_tactics.evaluate_defense(
+			observed,
+			ai_observed_threat,
+			ai_safe_evasion_exists,
+			_can_land_interrupt_attack(),
+			_can_setup_interrupt_attack(),
+			stamina / maxf(enemy_data.max_stamina, 1.0),
+			_can_ai_dash()
+		)
+	var defense_response := StringName(ai_defense_assessment.get("response", &"none"))
+	var defense_urgency := clampf(float(ai_defense_assessment.get("urgency", 0.0)), 0.0, 1.0)
+
 	var recognized_danger := (
 		perception.has_confirmed_visual_contact
 		and profile_can_read_telegraphs()
@@ -1038,6 +1118,19 @@ func _reconsider_ai_action() -> void:
 			or threat_danger >= ai_profile.predicted_danger_threshold
 		)
 	)
+	if (
+		defense_response == &"interrupt"
+		and current_attack == null
+		and attack_cooldown_left <= 0.0
+		and (
+			_can_land_interrupt_attack()
+			or _can_setup_interrupt_attack()
+		)
+	):
+		ai_action = &"interrupt"
+		utility_brain.interrupt_commitment()
+		return
+
 	var approach_transition_due: bool = (
 		ai_action == &"approach"
 		and perception.has_confirmed_visual_contact
@@ -1057,6 +1150,11 @@ func _reconsider_ai_action() -> void:
 		or (ai_action == &"approach" and not perception.has_confirmed_visual_contact)
 		or approach_transition_due
 		or (recognized_danger and ai_action not in [&"dodge", &"interrupt", &"retreat"])
+		or (
+			defense_response != &"none"
+			and defense_urgency >= 0.35
+			and ai_action != defense_response
+		)
 	)
 	if not utility_brain.should_reconsider(force_reconsideration):
 		return
@@ -1105,9 +1203,14 @@ func _reconsider_ai_action() -> void:
 		"cover_available": not ai_cover_candidate.is_empty(),
 		"dash_ready": _can_ai_dash(),
 		"interrupt_reaches": _can_land_interrupt_attack(),
+		"interrupt_setup_viable": _can_setup_interrupt_attack(),
 		"group_attacking_count": ai_group_attacking_count,
 		"group_ready_count": ai_group_ready_count,
+		"coordination_quality": ai_coordination_quality,
 		"nearby_allies": _count_nearby_living_allies(360.0),
+		"safe_evasion_exists": ai_safe_evasion_exists,
+		"defense_response": defense_response,
+		"defense_urgency": defense_urgency,
 		"suspicious": perception.is_suspicious,
 		"proximity": perception.proximity_detected,
 		"perception_confidence": perception.observation_confidence,
@@ -1157,7 +1260,7 @@ func _execute_ai_action(delta: float) -> void:
 	if (
 		combat_movement != null
 		and combat_movement.has_reposition()
-		and ai_action not in [&"dodge", &"interrupt", &"retreat", &"cover", &"search"]
+		and ai_action not in [&"dodge", &"interrupt", &"retreat", &"flee", &"cover", &"search"]
 	):
 		var reposition_position := combat_movement.get_reposition_position()
 		if global_position.distance_to(reposition_position) <= 10.0:
@@ -1185,8 +1288,11 @@ func _execute_ai_action(delta: float) -> void:
 		&"retreat":
 			_move_or_hold(_get_retreat_position(), 12.0, &"retreat")
 
+		&"flee":
+			_execute_flee_intention(delta)
+
 		&"search":
-			_execute_search_intention()
+			_execute_search_intention(delta)
 
 		&"circle":
 			_execute_circle_intention()
@@ -1203,32 +1309,939 @@ func _execute_ai_action(delta: float) -> void:
 		_:
 			_stop_navigation()
 
-func _execute_search_intention() -> void:
+func _execute_search_intention(delta: float) -> void:
 	if perception == null or not perception.is_aware:
+		_reset_search_movement_watchdog()
+		_clear_search_terrain_bypass()
 		_stop_navigation()
 		return
 
 	if perception.has_confirmed_visual_contact:
+		_reset_search_movement_watchdog()
+		_clear_search_terrain_bypass()
 		utility_brain.interrupt_commitment()
 		return
 
-	var search_position := perception.get_search_target_position()
-	debug_combat_position = search_position
+	var logical_target := perception.get_search_target_position()
+	debug_combat_position = logical_target
 
-	if search_position == Vector2.ZERO:
+	if logical_target == Vector2.ZERO:
+		_reset_search_movement_watchdog()
+		_clear_search_terrain_bypass()
 		_stop_navigation()
 		return
 
+	if ai_search_bypass_active:
+		_execute_search_terrain_bypass(delta)
+		return
+
+	if (
+		ai_search_logical_target == Vector2.ZERO
+		or ai_search_logical_target.distance_to(logical_target) > 12.0
+	):
+		ai_search_logical_target = logical_target
+		_clear_search_detour()
+		_reset_search_progress_only()
+
+	var search_phase := perception.get_search_phase()
+
+	# En el borde/perímetro, el círculo es referencia lógica:
+	# si aparece una roca, buscamos dónde reincorporarnos más adelante.
+	if search_phase in [1, 2]:
+		var obstacle_hit := _get_search_obstacle_ahead(logical_target)
+
+		if not obstacle_hit.is_empty():
+			if _begin_search_terrain_bypass(obstacle_hit):
+				_execute_search_terrain_bypass(delta)
+				return
+
+	# Durante el rush inicial mantenemos el desvío local corto.
+	if search_phase == 0 and not ai_search_detour_active:
+		var rush_hit := _get_search_obstacle_ahead(logical_target)
+
+		if not rush_hit.is_empty():
+			if _begin_search_detour(logical_target, rush_hit):
+				_reset_search_progress_only()
+
+	var movement_target := (
+		ai_search_detour_position
+		if ai_search_detour_active
+		else logical_target
+	)
+
+	if ai_search_detour_active:
+		if global_position.distance_to(ai_search_detour_position) <= 13.0:
+			var next_hit := _get_search_obstacle_ahead(logical_target)
+
+			if next_hit.is_empty():
+				_clear_search_detour()
+				movement_target = logical_target
+			else:
+				var previous_attempt := ai_search_detour_attempt
+				ai_search_detour_active = false
+				ai_search_detour_position = Vector2.ZERO
+				ai_search_detour_attempt = previous_attempt
+
+				if _begin_search_detour(logical_target, next_hit):
+					movement_target = ai_search_detour_position
+				else:
+					_stop_navigation()
+					return
+
+			_reset_search_progress_only()
+
+	_update_search_movement_watchdog(
+		delta,
+		movement_target,
+		logical_target
+	)
+
+	if ai_search_detour_active:
+		_move_search_detour_direct(movement_target)
+		return
+
+	if perception.is_search_rushing_to_last_seen():
+		var rush_offset := logical_target - global_position
+
+		if (
+			rush_offset.length() > ai_profile.search_arrival_distance * 3.0
+			and _can_ai_dash()
+			and _get_search_obstacle_ahead(logical_target).is_empty()
+		):
+			var dash_distance := (
+				enemy_data.dash_speed
+				* enemy_data.dash_duration
+			)
+
+			if _is_ai_dash_path_safe(
+				rush_offset.normalized(),
+				dash_distance
+			):
+				if _start_ai_dash(rush_offset.normalized()):
+					return
+
 	_move_or_hold(
-		search_position,
+		movement_target,
 		ai_profile.search_arrival_distance
 	)
 
-	# Mientras investiga no mira magicamente al Player oculto: orienta el cuerpo
-	# hacia la zona estimada que esta comprobando.
-	var look_direction := search_position - global_position
+	var look_direction := movement_target - global_position
 	if look_direction.length_squared() > 0.001:
 		_update_facing(look_direction.normalized())
+
+
+func _begin_search_terrain_bypass(
+	obstacle_hit: Dictionary
+) -> bool:
+	if perception == null:
+		return false
+
+	var phase := perception.get_search_phase()
+	if phase not in [1, 2]:
+		return false
+
+	var current_step := perception.get_search_perimeter_step()
+	var point_count := perception.get_search_perimeter_point_count()
+
+	if point_count <= 0:
+		return false
+
+	var hit_position := Vector2(
+		obstacle_hit.get("position", global_position)
+	)
+
+	var hit_normal := Vector2(
+		obstacle_hit.get(
+			"normal",
+			Vector2.RIGHT
+		)
+	)
+
+	if hit_normal.length_squared() < 0.001:
+		hit_normal = Vector2.RIGHT
+
+	hit_normal = hit_normal.normalized()
+
+	var logical_target := perception.get_search_target_position()
+	var to_target := logical_target - global_position
+
+	if to_target.length_squared() < 0.001:
+		return false
+
+	var forward := to_target.normalized()
+	var tangent := hit_normal.orthogonal()
+
+	if tangent.dot(forward.orthogonal()) < 0.0:
+		tangent *= -1.0
+
+	var clearance := _get_search_clearance_radius()
+
+	var best_waypoint := Vector2.ZERO
+	var best_rejoin := Vector2.ZERO
+	var best_rejoin_step := -1
+	var best_score := INF
+
+	# Hasta 6 checkpoints más adelante:
+	# suficiente para bordear una roca/grupo de rocas sin convertir la ruta
+	# en una excursión aleatoria.
+	var max_skip := mini(
+		6,
+		maxi(point_count - current_step, 0)
+	)
+
+	for skip_count in range(1, max_skip + 1):
+		var rejoin_step := mini(
+			current_step + skip_count,
+			point_count
+		)
+		var rejoin_position := perception.get_search_perimeter_point(
+			rejoin_step
+		)
+
+		if rejoin_position == Vector2.ZERO:
+			continue
+
+		for lateral_distance: float in [
+			75.0,
+			110.0,
+			150.0,
+			200.0,
+			260.0,
+			330.0,
+			410.0
+		]:
+			for side_sign: float in [1.0, -1.0]:
+				var tangent_direction := tangent * side_sign
+
+				var candidate := (
+					hit_position
+					+ tangent_direction * lateral_distance
+					+ hit_normal * (clearance * 1.85)
+					+ forward * minf(
+						45.0 + lateral_distance * 0.20,
+						105.0
+					)
+				)
+
+				candidate = _project_search_detour_to_navigation(
+					candidate
+				)
+
+				if candidate == Vector2.ZERO:
+					continue
+
+				if not _is_search_body_position_clear(candidate):
+					continue
+
+				if not _is_search_corridor_clear(
+					global_position,
+					candidate
+				):
+					continue
+
+				# El candidato solo vale si realmente permite volver a un
+				# checkpoint futuro del círculo.
+				if not _is_search_corridor_clear(
+					candidate,
+					rejoin_position
+				):
+					continue
+
+				var score := (
+					global_position.distance_to(candidate)
+					+ candidate.distance_to(rejoin_position)
+				)
+
+				# Preferir reincorporarse pronto, pero no insistir en un punto
+				# imposible solo por ser el siguiente.
+				score += float(skip_count - 1) * 32.0
+
+				var surface_clearance := candidate.distance_to(
+					hit_position
+				)
+				if surface_clearance < clearance * 2.6:
+					score += (
+						clearance * 2.6 - surface_clearance
+					) * 5.0
+
+				if score < best_score:
+					best_score = score
+					best_waypoint = candidate
+					best_rejoin = rejoin_position
+					best_rejoin_step = rejoin_step
+
+	if best_rejoin_step < 0:
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name,
+				"] SEARCH BYPASS | sin reincorporacion limpia"
+			)
+		return false
+
+	ai_search_bypass_active = true
+	ai_search_bypass_stage = 0
+	ai_search_bypass_waypoint = best_waypoint
+	ai_search_bypass_rejoin_position = best_rejoin
+	ai_search_bypass_rejoin_step = best_rejoin_step
+	ai_search_bypass_time = 0.0
+
+	_clear_search_detour()
+	_reset_search_progress_only()
+
+	if debug_combat:
+		print(
+			enemy_data.enemy_name,
+			" [", name,
+			"] SEARCH BYPASS TERRENO | rejoin ",
+			best_rejoin_step,
+			"/",
+			point_count
+		)
+
+	return true
+
+
+func _execute_search_terrain_bypass(delta: float) -> void:
+	if not ai_search_bypass_active:
+		return
+
+	ai_search_bypass_time += delta
+
+	# Un único obstáculo no puede secuestrar la IA durante un minuto.
+	if ai_search_bypass_time > 8.0:
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name,
+				"] SEARCH BYPASS TIMEOUT | recalcula"
+			)
+
+		_clear_search_terrain_bypass()
+		_reset_search_progress_only()
+		return
+
+	var target := (
+		ai_search_bypass_waypoint
+		if ai_search_bypass_stage == 0
+		else ai_search_bypass_rejoin_position
+	)
+
+	debug_combat_position = target
+
+	if target == Vector2.ZERO:
+		_clear_search_terrain_bypass()
+		return
+
+	var arrival := maxf(
+		ai_profile.search_arrival_distance,
+		12.0
+	)
+
+	if global_position.distance_to(target) <= arrival:
+		if ai_search_bypass_stage == 0:
+			ai_search_bypass_stage = 1
+			ai_search_bypass_time = 0.0
+			return
+
+		perception.complete_search_perimeter_rejoin(
+			ai_search_bypass_rejoin_step
+		)
+
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name,
+				"] SEARCH REJOIN | step ",
+				ai_search_bypass_rejoin_step
+			)
+
+		_clear_search_terrain_bypass()
+		_reset_search_progress_only()
+		return
+
+	_move_search_bypass_direct(target)
+
+
+func _move_search_bypass_direct(
+	target_position: Vector2
+) -> void:
+	var offset := target_position - global_position
+
+	if offset.length_squared() < 0.001:
+		velocity = Vector2.ZERO
+		return
+
+	wants_navigation_movement = false
+
+	if navigation_agent != null:
+		navigation_agent.velocity = Vector2.ZERO
+
+	var direction := offset.normalized()
+	_update_facing(direction)
+
+	velocity = (
+		direction
+		* enemy_data.move_speed
+		* ai_search_detour_speed_multiplier
+	)
+
+	move_and_slide()
+	_play_action_animation("walk")
+
+
+func _clear_search_terrain_bypass() -> void:
+	ai_search_bypass_active = false
+	ai_search_bypass_stage = 0
+	ai_search_bypass_waypoint = Vector2.ZERO
+	ai_search_bypass_rejoin_position = Vector2.ZERO
+	ai_search_bypass_rejoin_step = -1
+	ai_search_bypass_time = 0.0
+
+
+func _move_search_detour_direct(
+	target_position: Vector2
+) -> void:
+	var offset := target_position - global_position
+
+	if offset.length_squared() < 0.001:
+		velocity = Vector2.ZERO
+		return
+
+	# Cancela la contribución RVO mientras hacemos un tramo local que ya
+	# comprobamos físicamente.
+	wants_navigation_movement = false
+
+	if navigation_agent != null:
+		navigation_agent.velocity = Vector2.ZERO
+
+	var direction := offset.normalized()
+	_update_facing(direction)
+
+	velocity = (
+		direction
+		* enemy_data.move_speed
+		* ai_search_detour_speed_multiplier
+	)
+
+	move_and_slide()
+	_play_action_animation("walk")
+
+	# Si aun con movimiento directo una colisión inesperada impide avanzar,
+	# el watchdog detectará el bajo desplazamiento y generará un rodeo más amplio.
+
+
+func _update_search_movement_watchdog(
+	delta: float,
+	movement_target: Vector2,
+	logical_target: Vector2
+) -> void:
+	if (
+		ai_search_last_target_position == Vector2.ZERO
+		or ai_search_last_target_position.distance_to(movement_target) > 8.0
+	):
+		ai_search_last_target_position = movement_target
+		ai_search_last_sample_position = global_position
+		ai_search_progress_sample_left = 0.30
+		ai_search_stuck_time = 0.0
+		return
+
+	ai_search_progress_sample_left = maxf(
+		ai_search_progress_sample_left - delta,
+		0.0
+	)
+
+	if ai_search_progress_sample_left > 0.0:
+		return
+
+	ai_search_progress_sample_left = 0.30
+
+	var moved_distance := global_position.distance_to(
+		ai_search_last_sample_position
+	)
+	ai_search_last_sample_position = global_position
+
+	var distance_to_target := global_position.distance_to(
+		movement_target
+	)
+
+	if (
+		distance_to_target > ai_profile.search_arrival_distance * 1.35
+		and moved_distance < 5.0
+	):
+		ai_search_stuck_time += 0.30
+	else:
+		ai_search_stuck_time = 0.0
+
+	# Durante un desvío directo 0.35 s sin progreso ya es suficiente para saber
+	# que el sub-waypoint necesita un radio mayor. En movimiento normal dejamos
+	# un poco más de margen.
+	var stuck_threshold := 0.35 if ai_search_detour_active else 0.60
+	if ai_search_stuck_time < stuck_threshold:
+		return
+
+	if ai_search_bypass_active:
+		return
+
+	if debug_combat:
+		print(
+			enemy_data.enemy_name,
+			" [", name, "] SEARCH WATCHDOG | recalcula rodeo"
+		)
+
+	if ai_search_detour_active:
+		ai_search_failed_detour_position = ai_search_detour_position
+
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name,
+				"] SEARCH DESVIO DIRECTO BLOQUEADO | amplía radio"
+			)
+
+		ai_search_detour_active = false
+		ai_search_detour_position = Vector2.ZERO
+
+	var obstacle_hit := _get_search_obstacle_ahead(
+		logical_target,
+		ai_search_obstacle_lookahead * 1.35
+	)
+
+	if _begin_search_detour(logical_target, obstacle_hit):
+		_reset_search_progress_only()
+		return
+
+	if perception.get_search_phase() == 0:
+		perception.abandon_current_search_probe()
+
+	_reset_search_progress_only()
+
+
+func _reset_search_movement_watchdog() -> void:
+	ai_search_last_target_position = Vector2.ZERO
+	ai_search_last_sample_position = global_position
+	ai_search_progress_sample_left = 0.0
+	ai_search_stuck_time = 0.0
+	ai_search_logical_target = Vector2.ZERO
+	_clear_search_detour()
+	_clear_search_terrain_bypass()
+
+
+func _reset_search_progress_only() -> void:
+	ai_search_last_target_position = Vector2.ZERO
+	ai_search_last_sample_position = global_position
+	ai_search_progress_sample_left = 0.0
+	ai_search_stuck_time = 0.0
+
+
+func _clear_search_detour() -> void:
+	ai_search_detour_active = false
+	ai_search_detour_position = Vector2.ZERO
+	ai_search_detour_attempt = 0
+	ai_search_failed_detour_position = Vector2.ZERO
+
+
+func _get_search_obstacle_ahead(
+	logical_target: Vector2,
+	custom_lookahead: float = -1.0
+) -> Dictionary:
+	var to_target := logical_target - global_position
+
+	if to_target.length_squared() < 0.001:
+		return {}
+
+	var distance_to_target := to_target.length()
+	var forward := to_target / distance_to_target
+	var side := forward.orthogonal()
+
+	var lookahead := (
+		ai_search_obstacle_lookahead
+		if custom_lookahead <= 0.0
+		else custom_lookahead
+	)
+	lookahead = minf(lookahead, distance_to_target)
+
+	# Un pequeño margen por delante hace que el giro empiece antes de tocar
+	# físicamente el collider.
+	var end_center := global_position + forward * lookahead
+
+	var clearance := _get_search_clearance_radius()
+	var offsets: Array[float] = [
+		0.0,
+		clearance * 0.45,
+		-clearance * 0.45,
+		clearance,
+		-clearance
+	]
+
+	var best_hit: Dictionary = {}
+	var best_distance := INF
+
+	for lateral_offset: float in offsets:
+		var from_position := global_position + side * lateral_offset
+		var to_position := end_center + side * lateral_offset
+		var hit := _get_search_segment_hit(
+			from_position,
+			to_position
+		)
+
+		if hit.is_empty():
+			continue
+
+		var hit_position := Vector2(
+			hit.get("position", to_position)
+		)
+		var hit_distance := global_position.distance_to(
+			hit_position
+		)
+
+		if hit_distance < best_distance:
+			best_distance = hit_distance
+			best_hit = hit
+
+	return best_hit
+
+
+func _get_search_segment_hit(
+	from_position: Vector2,
+	to_position: Vector2
+) -> Dictionary:
+	var exclude: Array[RID] = [get_rid()]
+
+	if is_instance_valid(player):
+		exclude.append(player.get_rid())
+
+	var query := PhysicsRayQueryParameters2D.create(
+		from_position,
+		to_position,
+		body_collision_mask,
+		exclude
+	)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	return (
+		get_world_2d()
+		.direct_space_state
+		.intersect_ray(query)
+	)
+
+
+func _get_search_clearance_radius() -> float:
+	# Usa como mínimo el clearance manual y el radio real de avoidance del
+	# enemigo. El centro puede pasar por un hueco donde el cuerpo no entra.
+	return maxf(
+		ai_search_body_clearance,
+		enemy_data.avoidance_radius + 5.0
+	)
+
+
+func _is_search_body_position_clear(position: Vector2) -> bool:
+	var radius := _get_search_clearance_radius()
+
+	var circle := CircleShape2D.new()
+	circle.radius = radius
+
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = circle
+	query.transform = Transform2D(0.0, position)
+	query.collision_mask = body_collision_mask
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	var exclude: Array[RID] = [get_rid()]
+	if is_instance_valid(player):
+		exclude.append(player.get_rid())
+	query.exclude = exclude
+
+	var hits := (
+		get_world_2d()
+		.direct_space_state
+		.intersect_shape(query, 1)
+	)
+
+	return hits.is_empty()
+
+
+func _is_search_corridor_clear(
+	from_position: Vector2,
+	to_position: Vector2
+) -> bool:
+	var offset_vector := to_position - from_position
+
+	if offset_vector.length_squared() < 0.001:
+		return _is_search_body_position_clear(to_position)
+
+	var forward := offset_vector.normalized()
+	var side := forward.orthogonal()
+	var clearance := _get_search_clearance_radius()
+
+	# El destino tiene que poder alojar TODO el cuerpo.
+	if not _is_search_body_position_clear(to_position):
+		return false
+
+	# Y el trayecto debe dejar pasar el ancho del cuerpo, no solo su centro.
+	var offsets: Array[float] = [
+		0.0,
+		clearance * 0.45,
+		-clearance * 0.45,
+		clearance,
+		-clearance
+	]
+
+	for lateral_offset: float in offsets:
+		if not _get_search_segment_hit(
+			from_position + side * lateral_offset,
+			to_position + side * lateral_offset
+		).is_empty():
+			return false
+
+	return true
+
+
+func _begin_search_detour(
+	logical_target: Vector2,
+	obstacle_hit: Dictionary = {}
+) -> bool:
+	var to_target := logical_target - global_position
+
+	if to_target.length_squared() < 0.001:
+		return false
+
+	var forward := to_target.normalized()
+	var side := forward.orthogonal()
+	var clearance := _get_search_clearance_radius()
+
+	var hit := obstacle_hit
+	if hit.is_empty():
+		hit = _get_search_obstacle_ahead(
+			logical_target,
+			ai_search_obstacle_lookahead * 1.35
+		)
+
+	var hit_position := (
+		Vector2(
+			hit.get(
+				"position",
+				global_position + forward * 55.0
+			)
+		)
+		if not hit.is_empty()
+		else global_position + forward * 55.0
+	)
+
+	var hit_normal := (
+		Vector2(hit.get("normal", -forward))
+		if not hit.is_empty()
+		else -forward
+	)
+
+	if hit_normal.length_squared() < 0.001:
+		hit_normal = -forward
+
+	hit_normal = hit_normal.normalized()
+
+	var obstacle_tangent := hit_normal.orthogonal()
+	if obstacle_tangent.dot(side) < 0.0:
+		obstacle_tangent *= -1.0
+
+	if ai_search_detour_attempt == 0:
+		var left_alignment := side.dot(obstacle_tangent)
+		ai_search_detour_side_sign = (
+			1.0
+			if left_alignment >= 0.0
+			else -1.0
+		)
+
+	var candidate_positions: Array[Vector2] = []
+
+	# Cada fallo fuerza a probar radios MAYORES. Así una roca grande no puede
+	# devolver eternamente el mismo desvío corto.
+	var minimum_lateral := minf(
+		60.0 + float(ai_search_detour_attempt) * 55.0,
+		ai_search_detour_max_distance
+	)
+
+	var lateral_distances: Array[float] = [
+		60.0,
+		90.0,
+		125.0,
+		165.0,
+		215.0,
+		270.0,
+		325.0,
+		ai_search_detour_max_distance
+	]
+
+	for lateral_distance: float in lateral_distances:
+		if lateral_distance + 0.1 < minimum_lateral:
+			continue
+
+		for side_sign: float in [
+			ai_search_detour_side_sign,
+			-ai_search_detour_side_sign
+		]:
+			var tangent_direction := obstacle_tangent * side_sign
+
+			# El margen hacia afuera usa el RADIO DEL CUERPO, no un valor fijo.
+			var candidate := (
+				hit_position
+				+ tangent_direction * lateral_distance
+				+ forward * minf(
+					50.0 + lateral_distance * 0.34,
+					130.0
+				)
+				+ hit_normal * (clearance * 1.65)
+			)
+
+			candidate_positions.append(candidate)
+
+	var best_candidate := Vector2.ZERO
+	var best_score := INF
+
+	for raw_candidate: Vector2 in candidate_positions:
+		var candidate := _project_search_detour_to_navigation(
+			raw_candidate
+		)
+
+		if candidate == Vector2.ZERO:
+			continue
+
+		if global_position.distance_to(candidate) < 24.0:
+			continue
+
+		# Nunca volver a seleccionar prácticamente el mismo sub-waypoint que ya
+		# demostró no ser alcanzable.
+		if (
+			ai_search_failed_detour_position != Vector2.ZERO
+			and candidate.distance_to(
+				ai_search_failed_detour_position
+			) < clearance * 2.0
+		):
+			continue
+
+		# CRÍTICO RC9:
+		# el círculo completo del CharacterBody debe caber en el destino.
+		if not _is_search_body_position_clear(candidate):
+			continue
+
+		# También tiene que caber durante TODO el trayecto al sub-waypoint.
+		if not _is_search_corridor_clear(
+			global_position,
+			candidate
+		):
+			continue
+
+		var reconnects_cleanly := _is_search_corridor_clear(
+			candidate,
+			logical_target
+		)
+
+		var score := 0.0
+
+		# Gran prioridad a salir del obstáculo con conexión limpia.
+		if reconnects_cleanly:
+			score -= 650.0
+		else:
+			score += 160.0
+
+		score += candidate.distance_to(logical_target)
+		score += global_position.distance_to(candidate) * 0.16
+
+		# Mucho más margen respecto al punto de impacto.
+		var obstacle_clearance := candidate.distance_to(
+			hit_position
+		)
+		var desired_clearance := clearance * 2.6
+
+		if obstacle_clearance < desired_clearance:
+			score += (
+				desired_clearance - obstacle_clearance
+			) * 6.0
+
+		if score < best_score:
+			best_score = score
+			best_candidate = candidate
+
+	if best_candidate == Vector2.ZERO:
+		ai_search_detour_attempt += 1
+		ai_search_detour_side_sign *= -1.0
+
+		if debug_combat:
+			print(
+				enemy_data.enemy_name,
+				" [", name,
+				"] SEARCH SIN RODEO CON CLEARANCE | intento ",
+				ai_search_detour_attempt
+			)
+
+		return false
+
+	ai_search_detour_active = true
+	ai_search_detour_position = best_candidate
+	ai_search_detour_attempt += 1
+
+	if debug_combat:
+		print(
+			enemy_data.enemy_name,
+			" [", name,
+			"] SEARCH DESVIO VOLUMETRICO -> ",
+			best_candidate,
+			" | radio cuerpo ",
+			snappedf(clearance, 0.1),
+			" | intento ",
+			ai_search_detour_attempt
+		)
+
+	return true
+
+
+func _project_search_detour_to_navigation(
+	candidate: Vector2
+) -> Vector2:
+	if navigation_agent == null:
+		return candidate
+
+	var navigation_map := navigation_agent.get_navigation_map()
+
+	if not navigation_map.is_valid():
+		return candidate
+
+	if NavigationServer2D.map_get_regions(
+		navigation_map
+	).is_empty():
+		return candidate
+
+	var closest := NavigationServer2D.map_get_closest_point(
+		navigation_map,
+		candidate
+	)
+
+	# Si el navmesh proyecta demasiado lejos, ese rodeo no representa
+	# realmente el punto que queríamos probar.
+	if closest.distance_to(candidate) > 72.0:
+		return Vector2.ZERO
+
+	return closest
+
+
+func _is_search_detour_segment_clear(
+	candidate: Vector2
+) -> bool:
+	return _is_search_segment_clear(
+		global_position,
+		candidate
+	)
+
+
+func _is_search_segment_clear(
+	from_position: Vector2,
+	to_position: Vector2
+) -> bool:
+	return _is_search_corridor_clear(
+		from_position,
+		to_position
+	)
 
 
 func _execute_circle_intention() -> void:
@@ -1318,6 +2331,24 @@ func _get_cover_reentry_delay() -> float:
 	)
 
 
+func _has_safe_evasion_candidate(threat: Dictionary) -> bool:
+	if combat_tactics == null or not bool(threat.get("active", false)):
+		return false
+	var candidates := combat_tactics.get_evasion_candidates(global_position, threat)
+	for candidate: Dictionary in candidates:
+		var direction := Vector2(candidate.get("direction", Vector2.ZERO))
+		if direction.length_squared() < 0.001:
+			continue
+		var step_distance := ai_profile.predictive_dodge_step_distance + ai_profile.defense_clearance_padding
+		if _is_ai_dash_path_safe(direction, step_distance):
+			return true
+		if _can_ai_dash():
+			var dash_distance := enemy_data.dash_speed * enemy_data.dash_duration
+			if _is_ai_dash_path_safe(direction, dash_distance):
+				return true
+	return false
+
+
 func _execute_dodge_intention() -> void:
 	var observed := perception.get_observed_combat_state()
 
@@ -1351,6 +2382,20 @@ func _execute_interrupt_intention() -> void:
 	if perception == null:
 		_stop_navigation()
 		return
+
+	var observed := perception.get_observed_combat_state()
+	var observed_action := StringName(observed.get("action", &"none"))
+	var observed_phase := StringName(observed.get("phase", &"none"))
+	var interrupt_window_open := (
+		observed_phase == &"telegraph"
+		and observed_action in [&"attack", &"charge"]
+	)
+
+	if not interrupt_window_open:
+		ai_action = &"approach"
+		utility_brain.interrupt_commitment()
+		return
+
 	if not perception.has_confirmed_visual_contact:
 		ai_action = &"search"
 		utility_brain.interrupt_commitment()
@@ -1361,6 +2406,19 @@ func _execute_interrupt_intention() -> void:
 		_stop_navigation()
 		_start_attack(interrupt_attack)
 		return
+
+	var defense_response := StringName(ai_defense_assessment.get("response", &"none"))
+	if defense_response == &"dodge" and ai_safe_evasion_exists:
+		ai_action = &"dodge"
+		utility_brain.interrupt_commitment()
+		_execute_dodge_intention()
+		return
+	if defense_response == &"retreat":
+		ai_action = &"retreat"
+		utility_brain.interrupt_commitment()
+		_move_or_hold(_get_retreat_position(), 12.0, &"retreat")
+		return
+
 	_move_or_hold(perception.get_estimated_target_position(true), 8.0, &"approach")
 
 
@@ -1372,6 +2430,45 @@ func _can_land_interrupt_attack() -> bool:
 	if not _can_afford_attack(interrupt_attack):
 		return false
 	return _attack_reaches_estimated_target(interrupt_attack, _get_attack_direction(interrupt_attack))
+
+
+func _can_setup_interrupt_attack() -> bool:
+	if interrupt_attack == null or perception == null:
+		return false
+	if not perception.has_confirmed_visual_contact:
+		return false
+	if attack_cooldown_left > 0.0 or current_attack != null:
+		return false
+	if not _can_afford_attack(interrupt_attack):
+		return false
+
+	var observed := perception.get_observed_combat_state()
+	var observed_action := StringName(observed.get("action", &"none"))
+	var observed_phase := StringName(observed.get("phase", &"none"))
+	if (
+		observed_phase != &"telegraph"
+		or observed_action not in [&"attack", &"charge"]
+	):
+		return false
+
+	var target_position := perception.get_estimated_target_position(true)
+	var distance_to_target := global_position.distance_to(target_position)
+
+	var real_attack_reach := (
+		maxf(interrupt_attack.hitbox_start_offset, 0.0)
+		+ maxf(interrupt_attack.hitbox_length, 1.0)
+		+ maxf(ai_profile.target_radius_estimate, 0.0)
+	)
+
+	# No "teletransporta" un interrupt. Solo se compromete si físicamente puede
+	# cerrar una distancia razonable durante el telegraph observado.
+	var skill := ai_profile.get_intelligence_ratio()
+	var approach_allowance := maxf(
+		enemy_data.move_speed * lerpf(0.28, 0.68, skill),
+		36.0
+	)
+
+	return distance_to_target <= real_attack_reach + approach_allowance
 
 
 func _execute_attack_intention(delta: float) -> void:
@@ -1386,6 +2483,28 @@ func _execute_attack_intention(delta: float) -> void:
 		utility_brain.interrupt_commitment()
 		_move_or_hold(perception.get_estimated_target_position(false), 12.0)
 		return
+
+	var defense_response := StringName(ai_defense_assessment.get("response", &"none"))
+	var defense_urgency := clampf(float(ai_defense_assessment.get("urgency", 0.0)), 0.0, 1.0)
+	if defense_urgency >= ai_profile.emergency_dodge_threshold:
+		if (
+			defense_response == &"interrupt"
+			and (
+				_can_land_interrupt_attack()
+				or _can_setup_interrupt_attack()
+			)
+		):
+			_clear_ai_attack_plan()
+			ai_action = &"interrupt"
+			utility_brain.interrupt_commitment()
+			_execute_interrupt_intention()
+			return
+		if defense_response == &"dodge" and ai_safe_evasion_exists:
+			_clear_ai_attack_plan()
+			ai_action = &"dodge"
+			utility_brain.interrupt_commitment()
+			_execute_dodge_intention()
+			return
 
 	var available_attacks: Array[AttackData] = _get_available_attacks()
 	if available_attacks.is_empty():
@@ -1538,6 +2657,309 @@ func _count_nearby_living_allies(radius: float) -> int:
 	return count
 
 
+func _execute_flee_intention(delta: float) -> void:
+	if not ai_flee_committed:
+		_begin_flee()
+
+	ai_role = &"fleeing"
+	ai_can_attack = false
+	debug_can_attack = false
+	debug_hitbox_reaches_player = false
+	_clear_ai_attack_plan()
+	_release_reserved_cover()
+
+	# Actualiza el origen del peligro solo con información que la percepción ya
+	# posee. No lee mágicamente la posición real del Player detrás de paredes.
+	if perception != null and perception.is_aware:
+		ai_flee_danger_position = perception.get_estimated_target_position(false)
+
+	if ai_flee_danger_position == Vector2.ZERO:
+		ai_flee_danger_position = global_position - _get_perception_facing_direction() * 80.0
+
+	var distance_from_danger := global_position.distance_to(ai_flee_danger_position)
+	var has_visual_contact := (
+		perception != null
+		and perception.has_confirmed_visual_contact
+	)
+
+	# Para considerar que escapó de verdad debe romper LOS y mantener una
+	# separación razonable durante un pequeño tiempo.
+	if (
+		not has_visual_contact
+		and distance_from_danger >= ai_profile.get_flee_safe_distance()
+	):
+		ai_flee_safe_time += delta
+	else:
+		ai_flee_safe_time = 0.0
+
+	if ai_flee_safe_time >= ai_profile.get_flee_safe_duration():
+		_finish_flee()
+		return
+
+	ai_flee_repath_time_left = maxf(ai_flee_repath_time_left - delta, 0.0)
+
+	if (
+		ai_flee_target_position == Vector2.ZERO
+		or ai_flee_repath_time_left <= 0.0
+		or global_position.distance_to(ai_flee_target_position) <= 18.0
+	):
+		ai_flee_target_position = _choose_flee_target(ai_flee_danger_position)
+		ai_flee_repath_time_left = ai_profile.get_flee_repath_interval()
+
+	debug_combat_position = ai_flee_target_position
+
+	var offset := ai_flee_target_position - global_position
+	if offset.length_squared() < 0.001:
+		_stop_navigation()
+		return
+
+	# Durante una huida auténtica puede gastar dash de manera más agresiva que
+	# durante un simple reposicionamiento táctico.
+	if (
+		_can_ai_dash()
+		and offset.length() >= ai_profile.get_flee_dash_min_distance()
+	):
+		var dash_distance := enemy_data.dash_speed * enemy_data.dash_duration
+		if _is_ai_dash_path_safe(offset.normalized(), dash_distance):
+			if _start_ai_dash(offset.normalized()):
+				return
+
+	_move_toward_position(ai_flee_target_position)
+
+
+func _begin_flee() -> void:
+	ai_flee_committed = true
+	ai_flee_target_position = Vector2.ZERO
+	ai_flee_repath_time_left = 0.0
+	ai_flee_safe_time = 0.0
+	ai_role = &"fleeing"
+	ai_stance = &"defensive"
+
+	if perception != null and perception.is_aware:
+		ai_flee_danger_position = perception.get_estimated_target_position(false)
+	elif is_instance_valid(player):
+		# Solo se usa al instante de iniciar la huida, cuando la decisión acaba de
+		# surgir de un contexto de combate válido.
+		ai_flee_danger_position = player.global_position
+	else:
+		ai_flee_danger_position = global_position - Vector2.DOWN * 80.0
+
+	_clear_ai_attack_plan()
+	_release_reserved_cover()
+
+	if not ai_flee_help_called:
+		_alert_nearby_allies_while_fleeing()
+		ai_flee_help_called = true
+
+	if debug_combat:
+		print(
+			enemy_data.enemy_name,
+			" [", name, "] INICIA HUIDA REAL",
+			" | HP: ", health, "/", enemy_data.max_health,
+			" | IQ: ", roundi(ai_profile.intelligence_percent),
+			" | Personalidad: ", ai_profile.get_combat_personality_label()
+		)
+
+
+func _finish_flee() -> void:
+	if debug_combat:
+		print(
+			enemy_data.enemy_name,
+			" [", name, "] ESCAPA DEL COMBATE"
+		)
+
+	ai_flee_committed = false
+	ai_flee_target_position = Vector2.ZERO
+	ai_flee_danger_position = Vector2.ZERO
+	ai_flee_repath_time_left = 0.0
+	ai_flee_safe_time = 0.0
+	ai_flee_help_called = false
+	ai_action = &"idle"
+	ai_role = &"unaware"
+
+	if utility_brain != null:
+		utility_brain.interrupt_commitment()
+
+	if perception != null:
+		perception.clear_awareness_after_escape()
+
+	_stop_navigation()
+
+
+func _choose_flee_target(danger_position: Vector2) -> Vector2:
+	var away := global_position - danger_position
+	if away.length_squared() < 0.001:
+		away = Vector2.DOWN
+	away = away.normalized()
+
+	var escape_distance := ai_profile.get_flee_escape_distance()
+	var candidates: Array[Vector2] = []
+	var angle_offsets: Array[float] = [
+		0.0,
+		deg_to_rad(28.0),
+		deg_to_rad(-28.0),
+		deg_to_rad(55.0),
+		deg_to_rad(-55.0),
+		deg_to_rad(82.0),
+		deg_to_rad(-82.0)
+	]
+
+	for angle_offset: float in angle_offsets:
+		candidates.append(
+			global_position
+			+ away.rotated(angle_offset) * escape_distance
+		)
+
+	var rally := _get_flee_rally_candidate(danger_position)
+	if rally != Vector2.ZERO:
+		candidates.append(rally)
+
+	var best_position := global_position + away * escape_distance
+	var best_score := -INF
+
+	for raw_candidate: Vector2 in candidates:
+		var candidate := _project_flee_candidate_to_navigation(raw_candidate)
+		if candidate == Vector2.ZERO:
+			continue
+
+		var from_danger := candidate.distance_to(danger_position)
+		var travel_distance := candidate.distance_to(global_position)
+		var candidate_direction := candidate - global_position
+		var away_alignment := 0.0
+
+		if candidate_direction.length_squared() > 0.001:
+			away_alignment = candidate_direction.normalized().dot(away)
+
+		var score := from_danger
+		score += away_alignment * 85.0
+		score -= travel_distance * 0.08
+
+		if _flee_candidate_breaks_los(candidate):
+			score += escape_distance * ai_profile.flee_los_break_bonus
+
+		if rally != Vector2.ZERO and candidate.distance_to(rally) <= 24.0:
+			score += 55.0 * ai_profile.get_low_health_flee_quality()
+
+		if score > best_score:
+			best_score = score
+			best_position = candidate
+
+	return best_position
+
+
+func _project_flee_candidate_to_navigation(candidate: Vector2) -> Vector2:
+	if navigation_agent == null:
+		return candidate
+
+	var navigation_map := navigation_agent.get_navigation_map()
+	if not navigation_map.is_valid():
+		return candidate
+
+	if NavigationServer2D.map_get_regions(navigation_map).is_empty():
+		return candidate
+
+	var closest := NavigationServer2D.map_get_closest_point(
+		navigation_map,
+		candidate
+	)
+
+	# Si el punto pedido cae demasiado lejos del navmesh, se considera una mala
+	# ruta en vez de mandar al enemigo contra una pared.
+	if closest.distance_to(candidate) > 90.0:
+		return Vector2.ZERO
+
+	return closest
+
+
+func _flee_candidate_breaks_los(candidate: Vector2) -> bool:
+	if not is_instance_valid(player):
+		return false
+
+	var query := PhysicsRayQueryParameters2D.create(
+		candidate,
+		player.global_position,
+		ai_profile.sight_collision_mask,
+		[get_rid(), player.get_rid()]
+	)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty()
+
+
+func _get_flee_rally_candidate(danger_position: Vector2) -> Vector2:
+	var rally_radius := ai_profile.get_flee_rally_radius()
+	if rally_radius <= 0.0:
+		return Vector2.ZERO
+
+	var current_safety := global_position.distance_to(danger_position)
+	var best := Vector2.ZERO
+	var best_score := current_safety
+
+	for node: Node in get_tree().get_nodes_in_group("enemies"):
+		if node == self or not is_instance_valid(node) or not node is Node2D:
+			continue
+		if node.process_mode == Node.PROCESS_MODE_DISABLED:
+			continue
+		if node.has_method("is_enemy_alive") and not bool(node.call("is_enemy_alive")):
+			continue
+
+		var other := node as Node2D
+		if global_position.distance_to(other.global_position) > rally_radius:
+			continue
+
+		var ally_safety := other.global_position.distance_to(danger_position)
+		if ally_safety <= current_safety + 45.0:
+			continue
+
+		var score := ally_safety - global_position.distance_to(other.global_position) * 0.18
+		if score > best_score:
+			best_score = score
+			var extra_away := other.global_position - danger_position
+			if extra_away.length_squared() < 0.001:
+				extra_away = Vector2.DOWN
+			best = other.global_position + extra_away.normalized() * 55.0
+
+	return best
+
+
+func _alert_nearby_allies_while_fleeing() -> void:
+	if not ai_profile.flee_can_call_for_help:
+		return
+	if not is_instance_valid(player):
+		return
+
+	var help_radius := ai_profile.get_flee_help_radius()
+	if help_radius <= 0.0:
+		return
+
+	var warning_position := ai_flee_danger_position
+	if warning_position == Vector2.ZERO:
+		warning_position = player.global_position
+
+	for node: Node in get_tree().get_nodes_in_group("enemies"):
+		if node == self or not is_instance_valid(node) or not node is Node2D:
+			continue
+		if node.process_mode == Node.PROCESS_MODE_DISABLED:
+			continue
+		if global_position.distance_to((node as Node2D).global_position) > help_radius:
+			continue
+		if node.has_method("receive_flee_alert"):
+			node.call("receive_flee_alert", warning_position)
+
+
+func receive_flee_alert(threat_position: Vector2) -> void:
+	if health <= 0 or ai_flee_committed:
+		return
+
+	if perception != null:
+		perception.notice_position(threat_position)
+
+	if utility_brain != null:
+		utility_brain.interrupt_commitment()
+
+
 func _get_retreat_position() -> Vector2:
 
 	var danger_position: Vector2 = perception.get_estimated_target_position(true)
@@ -1563,6 +2985,15 @@ func _get_retreat_position() -> Vector2:
 # =========================================================
 
 func _update_ai_debug_label() -> void:
+
+	if not debug_combat:
+		if is_instance_valid(debug_ai_label):
+			debug_ai_label.visible = false
+		return
+
+	if debug_ai_update_time_left > 0.0 and is_instance_valid(debug_ai_label):
+		return
+	debug_ai_update_time_left = ai_profile.get_debug_label_update_interval() if ai_profile != null else 0.10
 
 	if not is_instance_valid(debug_ai_label):
 		_setup_ai_debug_label()
@@ -1622,11 +3053,17 @@ func _update_ai_debug_label() -> void:
 			+ combat_movement.get_debug_label()
 		)
 
+	var defense_label := String(ai_defense_assessment.get("response", &"none")).to_upper()
+	var defense_urgency_percent := roundi(clampf(float(ai_defense_assessment.get("urgency", 0.0)), 0.0, 1.0) * 100.0)
 	debug_ai_label.text += (
 		"\n"
 		+ stance_label
 		+ " | PEL "
 		+ str(threat_percent)
+		+ "% | DEF "
+		+ defense_label
+		+ " "
+		+ str(defense_urgency_percent)
 		+ "% | COMBO "
 		+ str(ai_combo_step)
 	)
@@ -1643,12 +3080,63 @@ func _update_ai_debug_label() -> void:
 		+ "%"
 	)
 
+	if (
+		perception != null
+		and ai_action == &"search"
+	):
+		debug_ai_label.text += (
+			" | "
+			+ perception.get_search_phase_label()
+		)
+
+		if ai_search_bypass_active:
+			debug_ai_label.text += (
+				" | BYPASS "
+				+ (
+					"BORDE"
+					if ai_search_bypass_stage == 0
+					else "REJOIN"
+				)
+			)
+		elif ai_search_detour_active:
+			debug_ai_label.text += " | DESVIO DIRECTO"
+
+	if (
+		current_attack != null
+		and interrupt_attack != null
+		and current_attack == interrupt_attack
+	):
+		debug_ai_label.text += " | >>> INTERRUPT <<<"
+
 	if utility_brain != null and ai_action == &"approach":
 		debug_ai_label.text += (
 			" | APR "
 			+ str(snappedf(utility_brain.get_current_action_elapsed(), 0.1))
 			+ "s"
 		)
+
+	if ai_flee_committed:
+		debug_ai_label.text += (
+			" | ESC "
+			+ str(snappedf(ai_flee_safe_time, 0.1))
+			+ "/"
+			+ str(snappedf(ai_profile.get_flee_safe_duration(), 0.1))
+			+ "s"
+		)
+
+	if (
+		perception != null
+		and perception.has_confirmed_visual_contact
+		and interrupt_attack != null
+	):
+		var observed_debug := perception.get_observed_combat_state()
+		if StringName(observed_debug.get("phase", &"none")) == &"telegraph":
+			debug_ai_label.text += (
+				" | INT R:"
+				+ ("Y" if _can_land_interrupt_attack() else "N")
+				+ " S:"
+				+ ("Y" if _can_setup_interrupt_attack() else "N")
+			)
 
 	if utility_brain != null and utility_brain.last_was_mistake:
 		debug_ai_label.text += " | ERROR"
@@ -1688,6 +3176,8 @@ func _update_ai_mobility_timers(delta: float) -> void:
 	ai_dash_cooldown_left = maxf(ai_dash_cooldown_left - delta, 0.0)
 	ai_reactive_cancel_cooldown_left = maxf(ai_reactive_cancel_cooldown_left - delta, 0.0)
 	ai_cover_reentry_cooldown_left = maxf(ai_cover_reentry_cooldown_left - delta, 0.0)
+	if ai_flee_committed and ai_dash_time_left > 0.0:
+		ai_flee_repath_time_left = maxf(ai_flee_repath_time_left - delta, 0.0)
 	if ai_is_holding_cover and not is_instance_valid(ai_reserved_cover):
 		_finish_cover_hold()
 	elif (
@@ -1826,7 +3316,7 @@ func _try_reactive_attack_cancel() -> bool:
 	var perceived_distance := global_position.distance_to(
 		perception.get_estimated_target_position(false)
 	)
-	if perceived_distance > maxf(ai_profile.preferred_distance + ai_profile.danger_padding, 105.0):
+	if perceived_distance > maxf(ai_profile.get_preferred_distance() + ai_profile.danger_padding, 105.0):
 		return false
 	if enemy_data.uses_stamina and stamina < enemy_data.reactive_cancel_stamina_cost:
 		return false
@@ -3634,10 +5124,44 @@ func _play_action_animation(animation_prefix: String) -> void:
 
 
 # =========================================================
+# ACTIVACIÓN DE ENCUENTRO
+# =========================================================
+
+func set_encounter_active(active: bool, hide_when_inactive: bool = true) -> void:
+	# Helper explícito para enemigos que todavía no deben participar del mapa.
+	# A diferencia de solo tocar Visible, también corta proceso, colisiones,
+	# avoidance y hitboxes para evitar "enemigos fantasma".
+	if not active:
+		_release_attack_commitment()
+		_clear_ai_attack_plan()
+		if attack_area != null:
+			attack_area.monitoring = false
+		if navigation_agent != null:
+			navigation_agent.avoidance_enabled = false
+		collision_layer = 0
+		collision_mask = 0
+		if hide_when_inactive:
+			visible = false
+		process_mode = Node.PROCESS_MODE_DISABLED
+		return
+
+	process_mode = Node.PROCESS_MODE_INHERIT
+	collision_layer = body_collision_layer
+	collision_mask = body_collision_mask
+	if navigation_agent != null:
+		navigation_agent.avoidance_enabled = true
+	if hide_when_inactive:
+		visible = true
+
+
+# =========================================================
 # COMBAT ACTIVE
 # =========================================================
 
 func is_combat_active() -> bool:
+
+	if process_mode == Node.PROCESS_MODE_DISABLED:
+		return false
 
 	if health <= 0:
 
@@ -3655,6 +5179,9 @@ func is_combat_active() -> bool:
 
 		return false
 
+
+	if ai_flee_committed:
+		return false
 
 	return (
 		perception != null
@@ -4263,20 +5790,20 @@ func _draw() -> void:
 		)
 
 
-	draw_line(
-		Vector2.ZERO,
-		player_local,
-		state_color,
-		3.0
-	)
+	if perception != null and perception.has_confirmed_visual_contact:
+		draw_line(
+			Vector2.ZERO,
+			player_local,
+			state_color,
+			3.0
+		)
 
-
-	draw_circle(
-		player_local,
-		5.0,
-		state_color,
-		true
-	)
+		draw_circle(
+			player_local,
+			5.0,
+			state_color,
+			true
+		)
 
 
 	var attack_to_draw: AttackData = (
@@ -4360,6 +5887,89 @@ func _draw_perception_debug() -> void:
 		true
 	)
 
+
+	if (
+		perception != null
+		and perception.is_aware
+		and not perception.has_confirmed_visual_contact
+		and ai_action == &"search"
+	):
+		var perimeter_center_local := to_local(
+			perception.get_search_perimeter_center()
+		)
+		var perimeter_radius := perception.get_search_perimeter_radius()
+
+		if perimeter_radius > 1.0:
+			# Circunferencia completa a recorrer.
+			draw_arc(
+				perimeter_center_local,
+				perimeter_radius,
+				0.0,
+				TAU,
+				80,
+				Color(0.2, 0.95, 0.75, 0.32),
+				1.5,
+				true
+			)
+
+			# Progreso ya recorrido de la vuelta.
+			var progress := perception.get_search_perimeter_progress()
+			if progress > 0.0:
+				draw_arc(
+					perimeter_center_local,
+					perimeter_radius + 4.0,
+					0.0,
+					TAU * progress,
+					maxi(roundi(80.0 * progress), 4),
+					Color(0.3, 1.0, 0.45, 0.90),
+					3.0,
+					true
+			)
+
+	if ai_search_bypass_active and ai_action == &"search":
+		var bypass_local := to_local(ai_search_bypass_waypoint)
+		var rejoin_local := to_local(ai_search_bypass_rejoin_position)
+
+		draw_line(
+			Vector2.ZERO,
+			bypass_local,
+			Color(1.0, 0.55, 0.12, 0.95),
+			2.0
+		)
+		draw_circle(
+			bypass_local,
+			6.0,
+			Color(1.0, 0.55, 0.12, 0.95),
+			true
+		)
+
+		draw_line(
+			bypass_local,
+			rejoin_local,
+			Color(0.25, 1.0, 0.85, 0.95),
+			2.0
+		)
+		draw_circle(
+			rejoin_local,
+			6.0,
+			Color(0.25, 1.0, 0.85, 0.95),
+			true
+		)
+
+	if ai_search_detour_active and ai_action == &"search":
+		var detour_local := to_local(ai_search_detour_position)
+		draw_line(
+			Vector2.ZERO,
+			detour_local,
+			Color(1.0, 0.45, 0.15, 0.90),
+			2.0
+		)
+		draw_circle(
+			detour_local,
+			5.0,
+			Color(1.0, 0.45, 0.15, 0.95),
+			true
+		)
 
 	if perception.is_aware and not perception.has_confirmed_visual_contact:
 

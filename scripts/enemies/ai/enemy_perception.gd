@@ -29,6 +29,7 @@ var observation_age := INF
 var uncertainty_radius := 0.0
 
 var _sample_cooldown := 0.0
+var _sense_poll_time_left := 0.0
 var _pending_observations: Array[Dictionary] = []
 var _random := RandomNumberGenerator.new()
 var _clock := 0.0
@@ -38,6 +39,29 @@ var _search_retarget_time_left := 0.0
 var _search_probe_index := 0
 var _search_probe_limit := 1
 var _last_seen_velocity := Vector2.ZERO
+var _search_anchor_reached := false
+var _search_forward_direction := Vector2.ZERO
+var _has_visual_history := false
+var _hearing_cue_refresh_time_left := 0.0
+var _proximity_cue_refresh_time_left := 0.0
+
+# Búsqueda territorial alrededor del ÚLTIMO PUNTO VISTO.
+# HOME = posición idle/spawn.
+# Fases:
+# 0 = RUSH al último punto visto
+# 1 = ir desde el centro al primer punto del perímetro
+# 2 = caminar la vuelta completa del perímetro
+# 3 = volver al idle
+# 4 = terminado
+var home_position := Vector2.ZERO
+var _search_phase: int = 0
+var _search_perimeter_center := Vector2.ZERO
+var _search_perimeter_radius: float = 0.0
+var _search_perimeter_start_angle: float = 0.0
+var _search_perimeter_direction_sign: float = 1.0
+var _search_perimeter_point_count: int = 16
+var _search_perimeter_step: int = 0
+var _search_perimeter_target := Vector2.ZERO
 
 
 func configure(
@@ -49,6 +73,7 @@ func configure(
 	owner_enemy = enemy
 	target = new_target
 	profile = ai_profile
+	home_position = enemy.global_position if enemy != null else Vector2.ZERO
 
 	if profile.deterministic_seed > 0:
 		_random.seed = profile.deterministic_seed + seed_offset
@@ -89,6 +114,26 @@ func _reset_perception_state() -> void:
 	_search_retarget_time_left = 0.0
 	_search_probe_index = 0
 	_search_probe_limit = 1
+	_search_anchor_reached = false
+	_search_forward_direction = Vector2.ZERO
+	_has_visual_history = false
+	_hearing_cue_refresh_time_left = 0.0
+	_proximity_cue_refresh_time_left = 0.0
+	_search_phase = 0
+	_search_perimeter_center = Vector2.ZERO
+	_search_perimeter_radius = 0.0
+	_search_perimeter_start_angle = 0.0
+	_search_perimeter_direction_sign = 1.0
+	_search_perimeter_point_count = 16
+	_search_perimeter_step = 0
+	_search_perimeter_target = Vector2.ZERO
+	_sense_poll_time_left = 0.0
+
+
+func clear_awareness_after_escape() -> void:
+	# Conserva el target asignado para poder detectarlo otra vez en el futuro,
+	# pero borra la persecución/memoria del combate que acaba de abandonar.
+	_reset_perception_state()
 
 
 func notice_position(world_position: Vector2) -> void:
@@ -138,11 +183,11 @@ func update(delta: float, facing_direction: Vector2) -> void:
 	_clock += delta
 	var had_raw_visual_contact := _was_raw_line_of_sight
 
-	has_line_of_sight = false
-	heard_target = false
-	proximity_detected = false
 	_sample_cooldown = maxf(_sample_cooldown - delta, 0.0)
+	_sense_poll_time_left = maxf(_sense_poll_time_left - delta, 0.0)
 	_search_retarget_time_left = maxf(_search_retarget_time_left - delta, 0.0)
+	_hearing_cue_refresh_time_left = maxf(_hearing_cue_refresh_time_left - delta, 0.0)
+	_proximity_cue_refresh_time_left = maxf(_proximity_cue_refresh_time_left - delta, 0.0)
 	observation_age += delta
 
 	if not is_instance_valid(owner_enemy):
@@ -150,8 +195,20 @@ func update(delta: float, facing_direction: Vector2) -> void:
 		is_suspicious = false
 		return
 
-	if is_instance_valid(target):
+	if not is_instance_valid(target):
+		has_line_of_sight = false
+		heard_target = false
+		proximity_detected = false
+		_forget_over_time(delta)
+		return
+
+	if _sense_poll_time_left <= 0.0:
 		_update_raw_senses(facing_direction)
+		var distance_to_target := owner_enemy.global_position.distance_to(target.global_position)
+		_sense_poll_time_left = profile.get_sense_poll_interval(
+			distance_to_target,
+			is_aware
+		)
 
 	# Detecta el instante en que un objetivo visible desaparece tras cobertura.
 	# La IA no conoce la nueva posición oculta: conserva únicamente la última
@@ -161,12 +218,20 @@ func update(delta: float, facing_direction: Vector2) -> void:
 
 	_update_visual_contact_epoch()
 
-	if is_instance_valid(target):
-		if (
-			has_line_of_sight
-			or heard_target
-			or proximity_detected
-		) and _sample_cooldown <= 0.0:
+	if is_instance_valid(target) and _sample_cooldown <= 0.0:
+		var should_sample_cue := has_line_of_sight
+		if heard_target and _hearing_cue_refresh_time_left <= 0.0:
+			should_sample_cue = true
+		elif (
+			proximity_detected
+			and not _has_visual_history
+			and _proximity_cue_refresh_time_left <= 0.0
+		):
+			# Si ya hubo una observación visual real, PROX solo mantiene
+			# awareness/sospecha. No toma otra posición exacta detrás de pared.
+			should_sample_cue = true
+
+		if should_sample_cue:
 			_queue_observation()
 
 	_deliver_ready_observations()
@@ -220,6 +285,144 @@ func get_estimated_target_position(use_prediction: bool = true) -> Vector2:
 	return result
 
 
+func abandon_current_search_probe() -> void:
+	if not is_aware or has_line_of_sight or owner_enemy == null:
+		return
+
+	# RC7:
+	# Un punto que el enemigo NO alcanzó no cuenta como perímetro recorrido.
+	# La resolución del obstáculo queda a cargo del movimiento local del Enemy.
+	#
+	# Solo hay una excepción: el último punto visto (fase 0) puede ser
+	# físicamente imposible por quedar dentro de una roca. En ese caso se toma
+	# la posición alcanzable más cercana como centro y recién ahí se inicia
+	# el perímetro.
+	if _search_phase == 0:
+		search_anchor_position = owner_enemy.global_position
+		_begin_perimeter_search()
+
+	_search_retarget_time_left = 0.0
+
+
+func get_search_phase_label() -> String:
+	match _search_phase:
+		0:
+			return "RUSH ULTIMO PUNTO"
+		1:
+			return "IR AL PERIMETRO"
+		2:
+			var percent := roundi(get_search_perimeter_progress() * 100.0)
+			return "RECORRER PERIMETRO %d%%" % percent
+		3:
+			return "VOLVER IDLE"
+		_:
+			return "FIN"
+
+
+func get_search_phase() -> int:
+	return _search_phase
+
+
+func is_search_rushing_to_last_seen() -> bool:
+	return (
+		is_aware
+		and not has_line_of_sight
+		and _search_phase == 0
+	)
+
+
+func is_search_walking_perimeter() -> bool:
+	return (
+		is_aware
+		and not has_line_of_sight
+		and _search_phase in [1, 2]
+	)
+
+
+func get_search_home_position() -> Vector2:
+	return home_position
+
+
+func get_search_perimeter_center() -> Vector2:
+	if _search_perimeter_center != Vector2.ZERO:
+		return _search_perimeter_center
+	return search_anchor_position
+
+
+func get_search_perimeter_radius() -> float:
+	if _search_perimeter_radius > 0.0:
+		return _search_perimeter_radius
+	if profile == null:
+		return 0.0
+
+	# IQ100 recorre prácticamente el radio entero de visión.
+	return profile.vision_range * lerpf(
+		0.72,
+		0.95,
+		profile.get_intelligence_ratio()
+	)
+
+
+func get_search_perimeter_progress() -> float:
+	if _search_phase < 2:
+		return 0.0
+	if _search_perimeter_point_count <= 0:
+		return 0.0
+	return clampf(
+		float(_search_perimeter_step)
+		/ float(_search_perimeter_point_count),
+		0.0,
+		1.0
+	)
+
+
+func get_search_perimeter_step() -> int:
+	return _search_perimeter_step
+
+
+func get_search_perimeter_point_count() -> int:
+	return _search_perimeter_point_count
+
+
+func get_search_perimeter_point(step: int) -> Vector2:
+	if _search_perimeter_center == Vector2.ZERO:
+		return Vector2.ZERO
+
+	var count := maxi(_search_perimeter_point_count, 1)
+	var safe_step := clampi(step, 0, count)
+	var normalized_step := float(safe_step) / float(count)
+
+	var angle := (
+		_search_perimeter_start_angle
+		+ TAU
+		* normalized_step
+		* _search_perimeter_direction_sign
+	)
+
+	return (
+		_search_perimeter_center
+		+ Vector2.RIGHT.rotated(angle)
+		* _search_perimeter_radius
+	)
+
+
+func complete_search_perimeter_rejoin(rejoin_step: int) -> void:
+	# Solo se llama cuando el enemigo alcanzó FÍSICAMENTE el punto futuro.
+	var count := maxi(_search_perimeter_point_count, 1)
+	var safe_step := clampi(rejoin_step, 0, count)
+
+	if safe_step >= count:
+		_search_phase = 3
+		_search_perimeter_step = count
+		_search_perimeter_target = home_position
+		search_target_position = home_position
+		return
+
+	_search_phase = 2
+	_search_perimeter_step = safe_step + 1
+	_update_perimeter_target()
+
+
 func get_search_target_position() -> Vector2:
 	if search_target_position != Vector2.ZERO:
 		return search_target_position
@@ -260,6 +463,10 @@ func get_observed_combat_state() -> Dictionary:
 
 
 func _update_raw_senses(facing_direction: Vector2) -> void:
+	has_line_of_sight = false
+	heard_target = false
+	proximity_detected = false
+
 	var distance_to_target := owner_enemy.global_position.distance_to(
 		target.global_position
 	)
@@ -317,6 +524,15 @@ func _queue_observation() -> void:
 		"snapshot": raw_snapshot
 	})
 
+	var skill := profile.get_intelligence_ratio()
+	if source == &"hearing":
+		# El sonido actualiza una ZONA, no una coordenada GPS continua.
+		_hearing_cue_refresh_time_left = lerpf(1.35, 0.72, skill)
+	elif source == &"proximity":
+		# Proximidad sirve para saber que "hay alguien muy cerca", pero no para
+		# copiar cada desplazamiento detrás de una pared.
+		_proximity_cue_refresh_time_left = lerpf(1.85, 1.05, skill)
+
 	if _pending_observations.size() > 8:
 		_pending_observations.pop_front()
 
@@ -353,6 +569,8 @@ func _deliver_observation(
 	visual_epoch: int
 ) -> void:
 	var skill := profile.get_intelligence_ratio()
+	var previous_last_known_position := last_known_position
+	var had_visual_history := _has_visual_history
 	var source_multiplier := 1.0
 	var confidence_base := 0.95
 
@@ -368,7 +586,12 @@ func _deliver_observation(
 			confidence_base = 0.90
 
 	var position_error := profile.get_memory_position_error() * source_multiplier
-	if source == &"proximity":
+	if source == &"hearing":
+		position_error = maxf(
+			position_error,
+			lerpf(72.0, 26.0, skill)
+		)
+	elif source == &"proximity":
 		position_error = maxf(
 			position_error,
 			profile.get_proximity_position_error()
@@ -397,6 +620,17 @@ func _deliver_observation(
 		+ error_direction * error_distance
 	)
 
+	if (
+		source in [&"hearing", &"proximity"]
+		and had_visual_history
+		and not has_line_of_sight
+	):
+		# Tras haber visto al objetivo, una pista no visual mantiene awareness,
+		# pero NO desplaza el último punto visto. La búsqueda territorial se ocupa
+		# de barrer la zona completa.
+		last_known_position = previous_last_known_position
+		estimated_velocity = _last_seen_velocity * 0.15
+
 	observation_source = source
 	observation_confidence = clampf(
 		confidence_base * lerpf(0.62, 1.0, skill),
@@ -409,10 +643,12 @@ func _deliver_observation(
 	is_aware = true
 
 	if source == &"vision":
+		_has_visual_history = true
 		last_seen_position = last_known_position
 		_last_seen_velocity = estimated_velocity
 		search_anchor_position = last_seen_position
 		search_target_position = last_seen_position
+		_search_forward_direction = estimated_velocity.normalized() if estimated_velocity.length_squared() > 1.0 else Vector2.ZERO
 		if has_line_of_sight and visual_epoch == _visual_epoch:
 			has_confirmed_visual_contact = true
 			is_suspicious = false
@@ -424,28 +660,26 @@ func _deliver_observation(
 			profile.get_suspicion_duration() * 0.55
 		)
 
-		# Una pista nueva debe poder desplazar una memoria vieja.
-		# En especial PROXIMITY: si el jugador está prácticamente encima,
-		# no tiene sentido seguir investigando un punto de hace varios segundos.
+		# Una pista auditiva puede desplazar la búsqueda solo si representa un
+		# cambio espacial importante. No sigue pequeñas variaciones detrás de muro.
 		var retarget_threshold := maxf(
-			profile.search_arrival_distance * 0.65,
-			18.0
+			profile.get_search_probe_radius() * 0.72,
+			52.0
 		)
 		var should_retarget_search := (
 			search_anchor_position == Vector2.ZERO
 			or last_known_position.distance_to(search_anchor_position) >= retarget_threshold
 		)
 
-		if source == &"proximity":
-			should_retarget_search = (
-				search_anchor_position == Vector2.ZERO
-				or last_known_position.distance_to(search_anchor_position) >= retarget_threshold
-				or owner_enemy.global_position.distance_to(search_anchor_position) > profile.search_arrival_distance
-			)
+		# Si ya existe memoria visual, PROXIMITY solo mantiene sospecha/awareness.
+		# No reemplaza el último punto realmente visto.
+		if source in [&"hearing", &"proximity"] and had_visual_history:
+			should_retarget_search = false
 
 		if should_retarget_search:
 			search_anchor_position = last_known_position
 			search_target_position = last_known_position
+			_search_forward_direction = estimated_velocity.normalized() if estimated_velocity.length_squared() > 1.0 else Vector2.ZERO
 			_reset_search_pattern()
 
 	# Lista blanca deliberada: el cerebro nunca recibe el diccionario crudo del
@@ -503,19 +737,20 @@ func _enter_suspicion() -> void:
 		profile.get_perceptual_memory_duration()
 	)
 
-	# Usa únicamente la trayectoria que alcanzó a observar antes de perder LOS.
-	var prediction_time := profile.get_search_prediction_time()
-	search_anchor_position = (
-		last_seen_position
-		+ _last_seen_velocity
-		* prediction_time
-		* observation_confidence
-	)
+	# SEARCH RC6 usa el ÚLTIMO PUNTO REALMENTE VISTO como centro.
+	# La trayectoria observada no mueve el centro: solo decide por qué sector
+	# del perímetro empezar a buscar.
+	search_anchor_position = last_seen_position
 
 	if search_anchor_position == Vector2.ZERO:
 		search_anchor_position = last_known_position
 
 	search_target_position = search_anchor_position
+	_search_forward_direction = _last_seen_velocity
+	if _search_forward_direction.length_squared() < 1.0:
+		_search_forward_direction = search_anchor_position - owner_enemy.global_position
+	if _search_forward_direction.length_squared() > 0.001:
+		_search_forward_direction = _search_forward_direction.normalized()
 	_reset_search_pattern()
 
 
@@ -534,7 +769,19 @@ func _forget_over_time(delta: float) -> void:
 		)
 
 	is_suspicious = suspicion_time_left > 0.0
-	is_aware = memory_time_left > 0.0 or is_suspicious
+
+	var search_committed := (
+		_has_visual_history
+		and search_anchor_position != Vector2.ZERO
+		and _search_phase >= 0
+		and _search_phase <= 3
+	)
+
+	is_aware = (
+		memory_time_left > 0.0
+		or is_suspicious
+		or search_committed
+	)
 
 	if not is_aware:
 		observation_source = &"none"
@@ -545,72 +792,170 @@ func _forget_over_time(delta: float) -> void:
 
 
 func _update_search_plan(_delta: float) -> void:
-	if not is_aware or has_line_of_sight:
+	if not is_aware or has_line_of_sight or owner_enemy == null:
 		return
 
 	if search_anchor_position == Vector2.ZERO:
+		search_anchor_position = last_seen_position
+	if search_anchor_position == Vector2.ZERO:
 		search_anchor_position = last_known_position
 
-	if search_target_position == Vector2.ZERO:
+	if home_position == Vector2.ZERO:
+		home_position = owner_enemy.global_position
+
+	var arrival := maxf(profile.search_arrival_distance, 12.0)
+
+	# ---------------------------------------------------------
+	# FASE 0 — LLEGAR LO MÁS RÁPIDO POSIBLE AL ÚLTIMO PUNTO
+	# ---------------------------------------------------------
+	if _search_phase == 0:
 		search_target_position = search_anchor_position
 
-	var distance_to_anchor := owner_enemy.global_position.distance_to(
-		search_anchor_position
+		if owner_enemy.global_position.distance_to(search_anchor_position) <= arrival:
+			_begin_perimeter_search()
+		return
+
+	# ---------------------------------------------------------
+	# FASE 1 — DESDE EL ÚLTIMO PUNTO IR AL BORDE DEL PERÍMETRO
+	# ---------------------------------------------------------
+	if _search_phase == 1:
+		if _search_perimeter_target == Vector2.ZERO:
+			_update_perimeter_target()
+
+		search_target_position = _search_perimeter_target
+
+		if owner_enemy.global_position.distance_to(search_target_position) <= arrival * 1.15:
+			# Ya está en el borde. El punto 0 es el inicio; el paso 1 empieza
+			# el recorrido real de la circunferencia.
+			_search_phase = 2
+			_search_perimeter_step = 1
+			_update_perimeter_target()
+		return
+
+	# ---------------------------------------------------------
+	# FASE 2 — CAMINAR TODA LA VUELTA DEL PERÍMETRO
+	# ---------------------------------------------------------
+	if _search_phase == 2:
+		if _search_perimeter_step > _search_perimeter_point_count:
+			_search_phase = 3
+			search_target_position = home_position
+			return
+
+		if _search_perimeter_target == Vector2.ZERO:
+			_update_perimeter_target()
+
+		search_target_position = _search_perimeter_target
+
+		if owner_enemy.global_position.distance_to(search_target_position) <= arrival * 1.20:
+			_search_perimeter_step += 1
+
+			if _search_perimeter_step > _search_perimeter_point_count:
+				_search_phase = 3
+				search_target_position = home_position
+			else:
+				_update_perimeter_target()
+		return
+
+	# ---------------------------------------------------------
+	# FASE 3 — VUELTA COMPLETA SIN ENCONTRARLO: REGRESAR AL IDLE
+	# ---------------------------------------------------------
+	if _search_phase == 3:
+		search_target_position = home_position
+
+		if owner_enemy.global_position.distance_to(home_position) <= arrival * 1.25:
+			_finish_full_search_sweep()
+		return
+
+
+func _begin_perimeter_search() -> void:
+	_search_phase = 1
+	_search_perimeter_center = search_anchor_position
+	_search_perimeter_radius = get_search_perimeter_radius()
+
+	var skill := profile.get_intelligence_ratio()
+
+	# IQ alto usa más puntos: la circunferencia se ve suave y cubre mejor.
+	_search_perimeter_point_count = clampi(
+		roundi(lerpf(10.0, 20.0, skill)),
+		10,
+		20
 	)
 
-	# Primero verifica el último punto razonable. Recién al llegar empieza a
-	# revisar laterales, simulando que busca bordes/salidas del obstáculo.
-	if distance_to_anchor > profile.search_arrival_distance:
-		search_target_position = search_anchor_position
-		return
-
-	if _search_retarget_time_left > 0.0:
-		return
-
-	if _search_probe_index >= _search_probe_limit:
-		_search_probe_index = 0
-		_search_probe_limit = profile.get_search_probe_count()
-
-	var forward := _last_seen_velocity
+	var forward := _search_forward_direction
 	if forward.length_squared() < 0.001:
-		forward = search_anchor_position - owner_enemy.global_position
+		forward = _last_seen_velocity
+	if forward.length_squared() < 0.001:
+		forward = search_anchor_position - home_position
 	if forward.length_squared() < 0.001:
 		forward = Vector2.RIGHT
 	forward = forward.normalized()
 
-	var side := forward.orthogonal()
-	var sign_value := 1.0 if _search_probe_index % 2 == 0 else -1.0
+	# Empieza la circunferencia por el sector hacia el que vio desplazarse al
+	# Player por última vez.
+	_search_perimeter_start_angle = forward.angle()
 
-	# Una IA inteligente prioriza la continuidad de la trayectoria observada.
-	# Una básica introduce más error y revisa posiciones menos consistentes.
-	var skill := profile.get_intelligence_ratio()
-	var probe_radius := profile.get_search_probe_radius()
-	var forward_bias := lerpf(0.10, 0.48, skill)
-	var candidate := (
-		search_anchor_position
-		+ side * probe_radius * sign_value
-		+ forward * probe_radius * forward_bias
+	var tangent := forward.orthogonal()
+	if _last_seen_velocity.length_squared() > 1.0:
+		_search_perimeter_direction_sign = (
+			1.0
+			if tangent.dot(_last_seen_velocity.normalized()) >= 0.0
+			else -1.0
+		)
+	else:
+		_search_perimeter_direction_sign = (
+			1.0
+			if _random.randf() >= 0.5
+			else -1.0
+		)
+
+	_search_perimeter_step = 0
+	_update_perimeter_target()
+
+
+func _update_perimeter_target() -> void:
+	if _search_perimeter_center == Vector2.ZERO:
+		_search_perimeter_center = search_anchor_position
+
+	if _search_perimeter_radius <= 0.0:
+		_search_perimeter_radius = get_search_perimeter_radius()
+
+	_search_perimeter_target = get_search_perimeter_point(
+		_search_perimeter_step
 	)
+	search_target_position = _search_perimeter_target
 
-	var jitter_radius := lerpf(probe_radius * 0.55, probe_radius * 0.08, skill)
-	if jitter_radius > 0.0:
-		candidate += Vector2.RIGHT.rotated(
-			_random.randf_range(0.0, TAU)
-		) * _random.randf_range(0.0, jitter_radius)
 
-	search_target_position = candidate
-	_search_probe_index += 1
-	_search_retarget_time_left = profile.get_search_retarget_interval()
+func _finish_full_search_sweep() -> void:
+	is_aware = false
+	is_suspicious = false
+	has_confirmed_visual_contact = false
+	memory_time_left = 0.0
+	suspicion_time_left = 0.0
+	observation_source = &"memory"
+	observation_confidence *= 0.35
+	search_target_position = home_position
+	_search_perimeter_target = Vector2.ZERO
+	_search_phase = 4
 
 
 func _reset_search_pattern() -> void:
 	_search_probe_index = 0
+	_search_anchor_reached = false
 	_search_probe_limit = (
 		profile.get_search_probe_count()
 		if profile != null
 		else 1
 	)
 	_search_retarget_time_left = 0.0
+
+	_search_phase = 0
+	_search_perimeter_center = Vector2.ZERO
+	_search_perimeter_radius = 0.0
+	_search_perimeter_start_angle = 0.0
+	_search_perimeter_direction_sign = 1.0
+	_search_perimeter_point_count = 16
+	_search_perimeter_step = 0
+	_search_perimeter_target = Vector2.ZERO
 
 
 func _update_visual_contact_epoch() -> void:

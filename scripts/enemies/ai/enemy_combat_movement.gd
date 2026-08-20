@@ -124,9 +124,9 @@ func _normalize_assignment_anchor(
 
 	match role:
 		&"flank":
-			desired_radius = profile.flank_radius
+			desired_radius = profile.flank_radius * profile.get_personality_preferred_distance_multiplier()
 		&"support", &"waiting":
-			desired_radius = profile.support_radius
+			desired_radius = profile.support_radius * profile.get_personality_preferred_distance_multiplier()
 
 	return target_position + direction * desired_radius
 
@@ -156,9 +156,10 @@ func get_circle_destination(
 
 	var radial_direction := radial.normalized()
 	var tangent := radial_direction.rotated(_circle_side * PI * 0.5)
-	var radial_error := radial.length() - profile.circle_radius
+	var desired_circle_radius := profile.circle_radius * profile.get_personality_preferred_distance_multiplier()
+	var radial_error := radial.length() - desired_circle_radius
 	var normalized_error := clampf(
-		radial_error / maxf(profile.circle_radius, 1.0),
+		radial_error / maxf(desired_circle_radius, 1.0),
 		-1.0,
 		1.0
 	)
